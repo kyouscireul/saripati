@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # Tier 1 — publish to npm (the primary distribution path).
+  npm-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Tier 3 — self-contained single binaries via `bun build --compile`.
+  # NOTE: better-sqlite3 and onnxruntime-node are native addons; bundling them
+  # into a standalone binary may require extra packaging steps. Treat this job as
+  # best-effort until validated on a real runner.
+  binaries:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            out: saripati-linux-x64
+          - os: macos-latest
+            out: saripati-macos-arm64
+          - os: windows-latest
+            out: saripati-win-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: bun build src/cli.ts --compile --outfile ${{ matrix.out }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.out }}

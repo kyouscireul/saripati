@@ -1,0 +1,57 @@
+{
+  "name": "saripati",
+  "version": "0.1.0",
+  "description": "Local-first, provider-agnostic MCP knowledge vault + research capture. Give any AI host a persistent, compounding memory.",
+  "type": "module",
+  "bin": {
+    "saripati": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "mcp": "tsx src/cli.ts mcp",
+    "ui": "tsx src/cli.ts ui",
+    "test": "tsx test/smoke.ts",
+    "build:binary": "bun build src/cli.ts --compile --outfile dist/saripati",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kyou/saripati.git"
+  },
+  "homepage": "https://github.com/kyou/saripati#readme",
+  "bugs": {
+    "url": "https://github.com/kyou/saripati/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "knowledge-vault",
+    "memory",
+    "local-first",
+    "sqlite",
+    "embeddings",
+    "rag"
+  ],
+  "license": "MIT",
+  "author": "Kyou",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@xenova/transformers": "^2.17.0",
+    "better-sqlite3": "^11.0.0",
+    "sqlite-vec": "^0.1.6",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
