@@ -21,8 +21,10 @@ flowchart TD
     E --> K
     F --> K
 
+    C --> C2["(optional) saripati onboard\n→ identity + companion persona"]
+    C2 --> K
     K --> L["Host spawns: node .../cli.js mcp\n(or npx -y saripati mcp)"]
-    L --> M["MCP process starts:\n1. resolvePaths()\n2. openDb()\n3. warmup() — loads MiniLM model\n4. Register 8 tools\n5. StdioServerTransport.connect()\n6. JSON-RPC ready"]
+    L --> M["MCP process starts:\n1. resolvePaths()\n2. openDb()\n3. banner() → stderr\n4. warmup() — loads MiniLM model\n5. Register 12 tools\n6. StdioServerTransport.connect()\n7. JSON-RPC ready"]
     M --> N([SARIPATI live — tools available to host])
 ```
 
@@ -34,7 +36,7 @@ flowchart TD
 stateDiagram-v2
     [*] --> Starting : Host spawns process
 
-    Starting --> ModelLoading : openDb() succeeds\nstderr: "saripati: loading embedding model…"
+    Starting --> ModelLoading : openDb() succeeds\nstderr: banner() + "saripati: loading embedding model…"
     ModelLoading --> Ready : warmup() resolves\nstderr: "saripati: model ready."\nstderr: "saripati: MCP server ready (vault: ...)"
     ModelLoading --> Ready : warmup() fails (non-fatal)\nstderr: "saripati: warning — embedding model failed to preload"
 
@@ -71,6 +73,14 @@ flowchart LR
         R6 --> R7([Results returned to host])
     end
 
+    subgraph Edit
+        E1([Obsidian edit]) -->|"import --md / import_md"| E2["parseEntryFile()"]
+        E2 --> E3["3-way reconcile\n(db vs file vs md_sync base)"]
+        E3 -->|"title/body changed"| E4["embed() → updateEntry()\nUPDATE entries + rebuild vec + fts"]
+        E3 -->|"conflict"| E5([reported; DB untouched\nunless --force-md])
+        E4 --> E6([Entry updated in place])
+    end
+
     subgraph Browse
         B1([User]) -->|"opens localhost:4319"| B2[Dashboard]
         B2 -->|"GET /api/entries?q=..."| B3["ftsSearch() only\n(no embedder in UI)"]
@@ -79,11 +89,16 @@ flowchart LR
 
     C5 -.->|"read by"| R4
     C5 -.->|"read by"| B3
+    C5 -.->|"edited via"| E2
 ```
 
-**Entries are never updated or deleted through MCP tools.** The vault is append-only for
-entries. Once written, an entry's id, kind, title, body, embedding, and FTS index row are
-permanent for the life of the database file.
+**Entries are append-only through the *capture* tools** (`save_research`, `remember`) — those
+never mutate an existing row. As of v0.2.0, entries **can** be edited or removed through the
+Markdown sync path: `import --md` calls `updateEntry()` for a changed file (re-embedding and
+rebuilding the vec + FTS rows atomically), and `import --md --prune` calls `deleteEntry()` for
+entries whose files were removed. Both preserve the tri-table invariant inside one
+transaction. There is still no *in-conversation* MCP tool that edits an entry's body — that
+path is deliberately Obsidian-via-import.
 
 ---
 
@@ -98,8 +113,8 @@ sequenceDiagram
 
     Note over AI,S: Session START
     AI->>S: tools/call session_boot {}
-    S-->>AI: {latest_session, recent_entries[8], active_projects}
-    Note over AI: Host reads context and resumes
+    S-->>AI: {identity, latest_session, recent_entries[8], active_projects}
+    Note over AI: Host adopts persona, reads context, resumes
 
     Note over AI,S: During session — any number of tool calls
     AI->>S: tools/call save_research / remember / recall / ...
@@ -111,10 +126,66 @@ sequenceDiagram
     Note over S: Row inserted into sessions table
 ```
 
-`session_boot` reads `latestSessions(db, 1)` (one row), `recentEntries(db, 8)` (eight most
-recent entries by `created_at DESC`), and `listProjects(db, "active")`. It does not modify
-state. Multiple `session_save` calls accumulate — there is no "current session" concept;
-each call appends a new row.
+`session_boot` reads `getIdentity(db)` (the singleton persona/profile), `latestSessions(db, 1)`
+(one row), `recentEntries(db, 8)` (eight most recent entries by `created_at DESC`), and
+`listProjects(db, "active")`. It does not modify state. Multiple `session_save` calls
+accumulate — there is no "current session" concept; each call appends a new row.
+
+---
+
+## 4b. Identity Lifecycle
+
+```mermaid
+flowchart TD
+    A([saripati onboard]) --> B{flag?}
+    B -->|"--print"| C["renderIdentity(getIdentity())"]
+    B -->|"--reset"| D["clearIdentity() — delete singleton"]
+    B -->|interactive / piped| E["5 steps: you → prefs → pick persona → customize → save"]
+    E --> F["upsertIdentity(): scalars COALESCE, JSON merges (json_patch)"]
+    F --> G([identity row id=1 written])
+    G -.->|"read by"| H["session_boot · whoami"]
+    G -.->|"exported as"| I["IDENTITY.md (import parses it back)"]
+    J([identity_set tool]) --> F
+```
+
+The `identity` row is a singleton (`CHECK (id = 1)`). `upsertIdentity` replaces scalar fields
+only when provided and **merges** the `user_prefs` / `companion_config` JSON via `json_patch`,
+so a host can build the persona incrementally across `identity_set` calls. Onboarding works on
+a TTY (readline) or piped (buffered lines) — the same flow, scriptable for CI.
+
+---
+
+## 4c. Markdown Sync Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant U as User / Host
+    participant S as saripati
+    participant O as Obsidian
+
+    Note over U,S: Export (DB → MD)
+    U->>S: export --md  /  export_md
+    S->>S: buildLinkContext + deriveLinks + backlinks
+    S->>O: write IDENTITY.md, MEMORY.md, memory/*.md
+    S->>S: upsertSyncHash(id, contentHash) — set merge base
+
+    Note over O: User edits a note body in Obsidian
+
+    Note over U,S: Import (MD → DB, 3-way reconcile)
+    U->>S: import --md [--force-md] [--prune]
+    S->>S: for each file — compare db/file/base hashes
+    alt only file changed
+        S->>S: embed() + updateEntry() — re-embed, rebuild vec+fts
+    else both changed
+        S-->>U: conflict (DB untouched) unless --force-md
+    else no id (hand-created)
+        S->>S: insertEntry() + back-fill id + rename canonical
+    end
+    S->>S: refresh md_sync base for reconciled entries
+```
+
+An unedited export→import reports every entry `unchanged` — the merge base makes it a stable
+no-op. `sync` runs export then import in one pass.
 
 ---
 
@@ -169,7 +240,7 @@ subsequent `embed()` call. The warm model adds negligible latency per call.
 ```mermaid
 flowchart TD
     A([Developer: make changes]) --> B["git commit + push to GitHub"]
-    B --> C["CI runs on main:\nbuild + test (4 smoke tests must pass)"]
+    B --> C["CI runs on main:\nbuild + test (7 smoke tests must pass)"]
     C --> D{CI green?}
     D -->|No| A
     D -->|Yes| E["npm run build\nnpm test  -- manual pre-flight"]
@@ -197,25 +268,45 @@ The `prepublishOnly` script (`npm run build && npm test`) runs automatically on 
 ## 8. Dashboard Lifecycle
 
 The dashboard (`saripati ui`) is a separate, independent process — it can run alongside the
-MCP server or independently. It opens the same SQLite file in **read-only mode** (all
-queries are SELECTs; no writes). Because SQLite WAL mode allows concurrent readers, the
-dashboard and the MCP server can operate simultaneously on the same vault file without
-locking conflicts.
+MCP server or independently. It opens the same SQLite file; PATCH is always live (write mode
+is on by default). SQLite WAL allows concurrent readers with no locking conflicts.
+
+Built on **Preact 10 + HTM** (no CDN, no bundler). Vendor files resolved via CJS path +
+`.module.js` suffix and served at `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js`.
+An `<script type="importmap">` in the HTML resolves the bare `"preact"` specifier used by
+`hooks.module.js` in the browser.
+
+Flags are **opt-out** (both on by default):
+- **`--no-write`**: disables `PATCH /api/entry/:id` (tags + kind editing).
+- **`--no-semantic`**: disables hybrid search — FTS keyword only, no model load.
 
 ```mermaid
 flowchart LR
-    A([User: npx saripati ui]) --> B["resolvePaths()\nopenDb()"]
-    B --> C["http.createServer() on port 4319\n(--port to override)"]
-    C --> D["openBrowser() — spawn start/open/xdg-open"]
+    A([User: npx saripati ui]) --> B["resolvePaths()\nopenDb()\nwrite=!--no-write, semantic=!--no-semantic"]
+    B --> C["resolveVendor() — preact/hooks/htm .module.js paths\nhttp.createServer() on port 4319"]
+    C --> D["openBrowser()"]
     D --> E([Browser opens localhost:4319])
-    E --> F["GET /  → INDEX_HTML"]
-    F --> G["Client JS: loadStatus() + loadEntries()"]
-    G --> H["GET /api/status → corpusStatus()"]
-    G --> I["GET /api/entries → listEntries() or ftsSearch()"]
-    I -->|User clicks entry| J["GET /api/entry/:id → getEntry()"]
-    I -->|User clicks Export| K["GET /api/export → toMarkdown() download"]
-    A -->|Ctrl+C or SIGTERM| L["server.close() + db.close() + process.exit(0)"]
+    E --> F["GET / → web.html (Preact 10 + HTM, importmap)\nGET /vendor/*.js → node_modules ESM files"]
+    F --> G["fetch /api/config → {writeMode, semanticMode}\nfetch /api/status → corpus + sessions_recent[5]\nfetch /api/entries → initial list"]
+
+    G -->|Entries tab| H["GET /api/entries?q=&kind=&tag=&project=&semantic=1\nGET /api/entry/:id → detail\nGET /api/backlinks/:id → backlinks\nSessions panel ← status.sessions_recent"]
+    G -->|Graph tab| I["GET /api/graph → {nodes≤300, edges≤600 via deriveLinks}\nContinuous physics + thermal noise RAF\n120-step pre-warm before first frame"]
+    G -->|Tags tab| J["GET /api/tags → [{tag, count}]\nClick → @project or #tag filter on Entries tab"]
+    G -->|Identity tab| K["GET /api/identity + /api/status\nHistory: sessions_recent[0] + sessions_recent[1..4]"]
+
+    H -->|write=true| L["PATCH /api/entry/:id {tags?, kind?}\n→ updateEntry() tri-table atomic"]
+    H -->|Export btn| M["GET /api/export?q=&kind=&tag= → Markdown download"]
+    A -->|Ctrl+C or SIGTERM| N["server.close() + db.close() + process.exit(0)"]
 ```
 
-The dashboard **does not load the embedding model**. Search in the UI is FTS5 only — fast,
-no latency, no model dependency. Semantic recall remains the AI host's job.
+**Theme:** Light by default (`data-theme="light"`, `#F5F4EF` bg). Header pill switches to dark.
+Persisted in `localStorage`. Graph canvas colours read `data-theme` attribute on each frame.
+
+**Graph physics:** The RAF loop never stops. `physicsStep()` applies repulsion, spring forces,
+gravity, and thermal noise (NOISE=0.18) every frame. DAMP=0.88 prevents runaway. Nodes start
+on a circle (radius 42% of viewport), pre-warmed 120 ticks (no noise) before first render to
+prevent the initial blast. Drag: `dragStart` position recorded; mouseup with < 8px travel = click
+(navigates to entry); ≥ 8px = drag release (stays on graph, physics resumes).
+
+**Sessions panel:** Rendered beside the entry detail (240px fixed-width column) using
+`status.sessions_recent` already in the `/api/status` response — no extra API call.

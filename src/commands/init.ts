@@ -87,6 +87,7 @@ export async function runInit(argv: string[]): Promise<void> {
     }
     out.write(`\nTo register automatically, re-run:  saripati init --write [--host <id>]\n`);
     out.write(`Host ids: ${targets.map((t) => t.id).join(", ")}\n`);
+    out.write(`\nNext, personalize your vault:  saripati onboard\n`);
     return;
   }
 

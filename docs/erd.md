@@ -1,8 +1,11 @@
 # SARIPATI — Entity Relationship Diagram
 
 All state lives in a single SQLite file (`~/.saripati/vault.db` by default).
-There are four regular tables, two virtual tables (one per index), and one
+There are six regular tables, two virtual tables (one per index), and one
 embedded string constant that defines the entire schema.
+
+> **v0.2.0** added two tables — `identity` (a singleton profile + companion
+> persona) and `md_sync` (the merge base for bidirectional Markdown sync).
 
 ---
 
@@ -51,6 +54,25 @@ erDiagram
         TEXT    updated_at   "datetime('now') UTC"
     }
 
+    identity {
+        INTEGER id PK "CHECK id = 1 — singleton row"
+        TEXT    user_name        "nullable"
+        TEXT    user_field       "nullable"
+        TEXT    user_prefs       "JSON object TEXT, DEFAULT '{}'"
+        TEXT    companion_name   "nullable"
+        TEXT    companion_role   "nullable"
+        TEXT    companion_tone   "nullable"
+        TEXT    companion_config "JSON object TEXT, DEFAULT '{}'"
+        TEXT    created_at "datetime('now') UTC"
+        TEXT    updated_at "datetime('now') UTC"
+    }
+
+    md_sync {
+        INTEGER entry_id PK "REFERENCES entries(id) ON DELETE CASCADE"
+        TEXT    md_hash   "16-hex content hash — the 3-way merge base"
+        TEXT    synced_at "datetime('now') UTC"
+    }
+
     vec_entries {
         INTEGER rowid     "== entries.id"
         BLOB    embedding "float[384] little-endian float32, L2-normalized"
@@ -66,6 +88,7 @@ erDiagram
     entries ||--o{ sources     : "has"
     entries ||--|| vec_entries : "has embedding (rowid sync)"
     entries ||--|| fts_entries : "has FTS index (rowid sync)"
+    entries ||--o| md_sync     : "has merge base (1:1, cascade)"
 ```
 
 ---
@@ -115,6 +138,29 @@ adds or updates fields without wiping existing ones. `status` controls
 filtering in `project_list` and in `session_boot` (which returns only
 `active` projects).
 
+### `identity` (singleton — who the vault serves)
+
+A single row (`CHECK (id = 1)`) holding the vault owner's profile and an optional
+AI-companion persona. Scalar fields (`user_name`, `user_field`, `companion_name`,
+`companion_role`, `companion_tone`) sit beside two JSON TEXT objects: `user_prefs`
+(skills, communication style, address, language) and `companion_config` (extended
+persona — traits, values, habits). Written by `saripati onboard`, by the
+`identity_set` MCP tool, and by importing `IDENTITY.md`. `upsertIdentity` mirrors
+`upsertProject`: scalar fields replace via `COALESCE` (a partial update preserves
+prior values) while the JSON objects **merge** via `json_patch()`, so the persona
+can be built incrementally. `getIdentity` returns it; `session_boot` embeds it.
+
+### `md_sync` (Markdown merge base)
+
+One row per entry, keyed by `entry_id` with `ON DELETE CASCADE` — so pruning an
+entry drops its sync record automatically. `md_hash` is a 16-hex content hash of
+the entry's *last-synced* state (kind, title, body, tags, project, confidence —
+normalized: CRLF→LF, trimmed, tags sorted). It is the **3-way merge base** for
+bidirectional sync: comparing the current DB hash, the current file hash, and this
+stored base tells `importVault` whether only the DB changed, only the file changed,
+or both (a conflict). Stored inside the `.db` (not a sidecar) so the source of
+truth stays a single portable file.
+
 ### `vec_entries` (virtual — sqlite-vec vec0)
 
 A virtual table managed by the `sqlite-vec` extension. `rowid` is kept equal
@@ -152,9 +198,12 @@ This avoids FTS5 operator injection.
 | entries | tags | `string[]` | `'["a","b"]'` |
 | sessions | next_steps | `string[]` | `'["step 1","step 2"]'` |
 | projects | metadata | `Record<string, unknown>` | `'{"key":"val"}'` |
+| identity | user_prefs | `Record<string, unknown>` | `'{"language":"English"}'` |
+| identity | companion_config | `Record<string, unknown>` | `'{"values":["clarity"]}'` |
 
-All three are parsed with `try/catch` guards (`safeParseArray`, `safeParseObject`)
+All are parsed with `try/catch` guards (`safeParseArray`, `safeParseObject`)
 and return an empty array/object on malformed data — never throws at read time.
+The two `identity` JSON columns are **merged** on write via SQLite `json_patch()`.
 
 ---
 
@@ -177,6 +226,44 @@ entries table.
 Note: `better-sqlite3` requires `BigInt(id)` for the `vec_entries` rowid
 because it binds plain JS `number` as SQLite `REAL`, which breaks vec0's
 strict integer rowid requirement.
+
+### `updateEntry()` — the same invariant, on the edit path
+
+Introduced in v0.2.0 for Markdown import, `updateEntry()` is the first
+non-append write path. It preserves the tri-table invariant inside one
+`db.transaction()`, touching each index **only when needed**:
+
+```
+BEGIN
+  UPDATE entries SET kind/title/body/confidence/tags/project, updated_at=now
+  if embedding supplied (title/body changed):   -- caller re-embeds
+      DELETE FROM vec_entries WHERE rowid = BigInt(id)
+      INSERT INTO vec_entries (rowid, embedding)
+  if title/body/tags changed:
+      DELETE FROM fts_entries WHERE rowid = id
+      INSERT INTO fts_entries (rowid, title, body, tags)
+COMMIT
+```
+
+A metadata-only edit (e.g. only `project`) rewrites neither index. Re-embedding
+is the caller's job — `queries.ts` stays synchronous and pure; `sync/md.ts`
+computes the new vector and passes it in.
+
+### `deleteEntry()` — cascade + explicit index cleanup
+
+`sources` and `md_sync` fall away via `ON DELETE CASCADE`; the two virtual
+tables carry no foreign key, so they are cleared explicitly first, all in one
+transaction:
+
+```
+BEGIN
+  DELETE FROM vec_entries WHERE rowid = BigInt(id)
+  DELETE FROM fts_entries WHERE rowid = id
+  DELETE FROM entries WHERE id = id        -- cascades sources + md_sync
+COMMIT
+```
+
+Used only by `import --md --prune`.
 
 ---
 

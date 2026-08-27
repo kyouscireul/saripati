@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DB } from "../../db/db.js";
-import { insertSession, latestSessions, recentEntries, listProjects } from "../../db/queries.js";
+import { insertSession, latestSessions, recentEntries, listProjects, getIdentity } from "../../db/queries.js";
 import { jsonResult } from "./_result.js";
 
 export function registerSessionTools(server: McpServer, db: DB): void {
@@ -10,11 +10,13 @@ export function registerSessionTools(server: McpServer, db: DB): void {
     {
       title: "Session boot",
       description:
-        "Load continuity context at the start of a work session: the most recent session digest, " +
-        "recently captured entries, and active projects. Call this first to pick up where you left off.",
+        "Load continuity context at the start of a work session: the vault owner's identity, the " +
+        "most recent session digest, recently captured entries, and active projects. Call this " +
+        "first to adopt the right persona and pick up where you left off.",
       inputSchema: {},
     },
     async () => {
+      const identity = getIdentity(db);
       const session = latestSessions(db, 1)[0] ?? null;
       const recent = recentEntries(db, 8).map((e) => ({
         id: e.id,
@@ -29,6 +31,7 @@ export function registerSessionTools(server: McpServer, db: DB): void {
         status: p.status,
       }));
       return jsonResult("Session context loaded.", {
+        identity,
         latest_session: session,
         recent_entries: recent,
         active_projects: projects,

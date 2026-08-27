@@ -11,18 +11,27 @@
  * the UI or init dependencies.
  */
 
-const HELP = `saripati — a local-first, compounding knowledge vault for any AI host
+import { banner, caps } from "./term/theme.js";
 
-Usage:
-  saripati init [--db <path>]     Create the vault and register it with your AI host
-  saripati mcp  [--db <path>]     Start the MCP server (stdio) — hosts connect here
-  saripati ui   [--port <n>]      Open the dashboard to browse and export the corpus
+const USAGE = `Usage:
+  saripati init    [--db <path>]  Create the vault and register it with your AI host
+  saripati onboard                Set up your identity + optional companion persona
+  saripati mcp     [--db <path>]  Start the MCP server (stdio) — hosts connect here
+  saripati ui      [--port <n>]   Open the dashboard to browse and export the corpus
+  saripati export  --md [--out d] Mirror the vault to an Obsidian-friendly folder
+  saripati import  --md [--force-md] [--prune]   Reconcile Markdown edits back in
+  saripati sync    [--force-md] [--prune]        Export then import in one pass
   saripati help                   Show this help
 
 Environment:
   SARIPATI_HOME   Data directory (default: ~/.saripati)
   SARIPATI_DB     Vault database path (default: <SARIPATI_HOME>/vault.db)
 `;
+
+/** Full help screen: the wordmark over usage. Rendered for stdout. */
+function helpScreen(): string {
+  return `${banner(undefined, caps(process.stdout))}\n\n${USAGE}`;
+}
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
@@ -31,6 +40,26 @@ async function main(): Promise<void> {
     case "init": {
       const { runInit } = await import("./commands/init.js");
       await runInit(rest);
+      break;
+    }
+    case "onboard": {
+      const { runOnboard } = await import("./commands/onboard.js");
+      await runOnboard(rest);
+      break;
+    }
+    case "export": {
+      const { runExport } = await import("./commands/sync.js");
+      await runExport(rest);
+      break;
+    }
+    case "import": {
+      const { runImport } = await import("./commands/sync.js");
+      await runImport(rest);
+      break;
+    }
+    case "sync": {
+      const { runSync } = await import("./commands/sync.js");
+      await runSync(rest);
       break;
     }
     case "mcp": {
@@ -47,10 +76,10 @@ async function main(): Promise<void> {
     case "--help":
     case "-h":
     case undefined:
-      process.stdout.write(HELP);
+      process.stdout.write(`${helpScreen()}\n`);
       break;
     default:
-      process.stderr.write(`Unknown command: ${command}\n\n${HELP}`);
+      process.stderr.write(`Unknown command: ${command}\n\n${USAGE}`);
       process.exitCode = 1;
   }
 }

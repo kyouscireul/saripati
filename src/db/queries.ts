@@ -101,6 +101,102 @@ export function insertEntry(db: DB, input: EntryInput, embedding: number[]): num
   return tx();
 }
 
+export interface EntryPatch {
+  kind?: EntryKind;
+  title?: string;
+  body?: string;
+  confidence?: number | null;
+  tags?: string[];
+  project?: string | null;
+}
+
+/**
+ * Update an existing entry while keeping vec_entries + fts_entries in lockstep.
+ *
+ * All three tables are mutated inside ONE transaction, so a concurrent reader
+ * never observes a torn state (the tri-table invariant insertEntry establishes).
+ * Re-embedding is the caller's responsibility (this module stays sync + pure):
+ * pass `embedding` whenever title/body changed so the vector reflects the new
+ * content; omit it for metadata-only edits. The vector row is only rewritten
+ * when an embedding is supplied, and the FTS row only when title/body/tags
+ * actually changed — metadata-only edits touch neither index. Returns the
+ * updated row, or null if the id does not exist.
+ */
+export function updateEntry(
+  db: DB,
+  id: number,
+  patch: EntryPatch,
+  embedding?: number[],
+): EntryRow | null {
+  const current = db.prepare(`SELECT * FROM entries WHERE id = ?`).get(id) as RawEntryRow | undefined;
+  if (!current) return null;
+
+  const merged = {
+    kind: patch.kind ?? current.kind,
+    title: patch.title ?? current.title,
+    body: patch.body ?? current.body,
+    confidence: patch.confidence !== undefined ? patch.confidence : current.confidence,
+    tags: patch.tags ?? safeParseArray(current.tags),
+    project: patch.project !== undefined ? patch.project : current.project,
+  };
+  const tagsJson = JSON.stringify(merged.tags);
+  const ftsDirty =
+    merged.title !== current.title || merged.body !== current.body || tagsJson !== current.tags;
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `UPDATE entries
+          SET kind = @kind, title = @title, body = @body, confidence = @confidence,
+              tags = @tags, project = @project, updated_at = datetime('now')
+        WHERE id = @id`,
+    ).run({
+      kind: merged.kind,
+      title: merged.title,
+      body: merged.body,
+      confidence: merged.confidence ?? null,
+      tags: tagsJson,
+      project: merged.project ?? null,
+      id,
+    });
+
+    if (embedding) {
+      // vec0 keys on an INTEGER rowid; bind BigInt to force integer affinity.
+      db.prepare(`DELETE FROM vec_entries WHERE rowid = ?`).run(BigInt(id));
+      db.prepare(`INSERT INTO vec_entries (rowid, embedding) VALUES (?, ?)`).run(
+        BigInt(id),
+        vecToBlob(embedding),
+      );
+    }
+    if (ftsDirty) {
+      db.prepare(`DELETE FROM fts_entries WHERE rowid = ?`).run(id);
+      db.prepare(`INSERT INTO fts_entries (rowid, title, body, tags) VALUES (?, ?, ?, ?)`).run(
+        id,
+        merged.title,
+        merged.body,
+        merged.tags.join(" "),
+      );
+    }
+  });
+  tx();
+
+  const fresh = db.prepare(`SELECT * FROM entries WHERE id = ?`).get(id) as RawEntryRow;
+  return hydrate(fresh);
+}
+
+/**
+ * Delete an entry and every index/child row that hangs off it, atomically.
+ * sources + md_sync fall away via ON DELETE CASCADE; the vec/fts virtual tables
+ * carry no foreign key, so they are cleared explicitly first.
+ */
+export function deleteEntry(db: DB, id: number): boolean {
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM vec_entries WHERE rowid = ?`).run(BigInt(id));
+    db.prepare(`DELETE FROM fts_entries WHERE rowid = ?`).run(id);
+    return db.prepare(`DELETE FROM entries WHERE id = ?`).run(id).changes;
+  });
+  return tx() > 0;
+}
+
 export function insertSource(db: DB, entryId: number, src: SourceInput): number {
   const info = db
     .prepare(
@@ -160,6 +256,12 @@ export function listEntries(db: DB, filters: ListFilters = {}): EntryRow[] {
 
 export function recentEntries(db: DB, limit = 8): EntryRow[] {
   return listEntries(db, { limit });
+}
+
+/** Every entry, oldest first — the whole-corpus view export and link-graph need. */
+export function allEntries(db: DB): EntryRow[] {
+  const rows = db.prepare(`SELECT * FROM entries ORDER BY id`).all() as RawEntryRow[];
+  return rows.map(hydrate);
 }
 
 /* --------------------------------------------------------------------------
@@ -323,6 +425,108 @@ function safeParseObject(json: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/* --------------------------------------------------------------------------
+ * Identity (singleton — who this vault belongs to + optional AI companion)
+ * ------------------------------------------------------------------------ */
+
+export interface IdentityInput {
+  user_name?: string | null;
+  user_field?: string | null;
+  user_prefs?: Record<string, unknown>;
+  companion_name?: string | null;
+  companion_role?: string | null;
+  companion_tone?: string | null;
+  companion_config?: Record<string, unknown>;
+}
+
+export interface IdentityRow {
+  id: number;
+  user_name: string | null;
+  user_field: string | null;
+  user_prefs: Record<string, unknown>;
+  companion_name: string | null;
+  companion_role: string | null;
+  companion_tone: string | null;
+  companion_config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RawIdentityRow extends Omit<IdentityRow, "user_prefs" | "companion_config"> {
+  user_prefs: string;
+  companion_config: string;
+}
+
+function hydrateIdentity(raw: RawIdentityRow): IdentityRow {
+  return {
+    ...raw,
+    user_prefs: safeParseObject(raw.user_prefs),
+    companion_config: safeParseObject(raw.companion_config),
+  };
+}
+
+export function getIdentity(db: DB): IdentityRow | null {
+  const raw = db.prepare(`SELECT * FROM identity WHERE id = 1`).get() as RawIdentityRow | undefined;
+  return raw ? hydrateIdentity(raw) : null;
+}
+
+/**
+ * Insert or update the singleton identity row. Scalar fields are only replaced
+ * when provided (COALESCE); the JSON prefs/config objects are merged (json_patch)
+ * so callers can build the persona incrementally — mirrors upsertProject.
+ */
+export function upsertIdentity(db: DB, input: IdentityInput): IdentityRow {
+  db.prepare(
+    `INSERT INTO identity
+       (id, user_name, user_field, user_prefs, companion_name, companion_role, companion_tone, companion_config, updated_at)
+     VALUES
+       (1, @user_name, @user_field, @user_prefs, @companion_name, @companion_role, @companion_tone, @companion_config, datetime('now'))
+     ON CONFLICT(id) DO UPDATE SET
+       user_name        = COALESCE(excluded.user_name, identity.user_name),
+       user_field       = COALESCE(excluded.user_field, identity.user_field),
+       user_prefs       = json_patch(identity.user_prefs, excluded.user_prefs),
+       companion_name   = COALESCE(excluded.companion_name, identity.companion_name),
+       companion_role   = COALESCE(excluded.companion_role, identity.companion_role),
+       companion_tone   = COALESCE(excluded.companion_tone, identity.companion_tone),
+       companion_config = json_patch(identity.companion_config, excluded.companion_config),
+       updated_at       = datetime('now')`,
+  ).run({
+    user_name: input.user_name ?? null,
+    user_field: input.user_field ?? null,
+    user_prefs: JSON.stringify(input.user_prefs ?? {}),
+    companion_name: input.companion_name ?? null,
+    companion_role: input.companion_role ?? null,
+    companion_tone: input.companion_tone ?? null,
+    companion_config: JSON.stringify(input.companion_config ?? {}),
+  });
+  return getIdentity(db)!;
+}
+
+/** Clear the singleton identity row (used by `saripati onboard --reset`). */
+export function clearIdentity(db: DB): void {
+  db.prepare(`DELETE FROM identity WHERE id = 1`).run();
+}
+
+/* --------------------------------------------------------------------------
+ * MD sync manifest — the 3-way merge base for bidirectional Markdown sync
+ * ------------------------------------------------------------------------ */
+
+/** The last-synced content hash for an entry, or null if never synced. */
+export function getSyncHash(db: DB, entryId: number): string | null {
+  const r = db.prepare(`SELECT md_hash FROM md_sync WHERE entry_id = ?`).get(entryId) as
+    | { md_hash: string }
+    | undefined;
+  return r?.md_hash ?? null;
+}
+
+/** Record (or refresh) the merge base after a successful export/import. */
+export function upsertSyncHash(db: DB, entryId: number, hash: string): void {
+  db.prepare(
+    `INSERT INTO md_sync (entry_id, md_hash, synced_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(entry_id) DO UPDATE SET md_hash = excluded.md_hash, synced_at = datetime('now')`,
+  ).run(entryId, hash);
 }
 
 /* --------------------------------------------------------------------------

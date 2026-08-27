@@ -1,0 +1,1184 @@
+<!doctype html>
+<html data-theme="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SARIPATI</title>
+<style>
+/* ── Palette ─────────────────────────────────────────── */
+:root {
+  --bg:#F5F4EF; --sf:#EDECEA; --sf2:#E6E5E0; --sf3:#DDDCD8;
+  --ln:rgba(0,0,0,0.08); --ln2:rgba(0,0,0,0.05);
+  --tx:#1A1A1A; --dm:#6A6A6A; --mt:#9A9A9A;
+  --am:#D97800; --gd:#B86800; --gn:#2A8A2A; --er:#CC2222;
+  --am10:rgba(217,120,0,0.10); --am25:rgba(217,120,0,0.25);
+  --gn10:rgba(42,138,42,0.10); --gn25:rgba(42,138,42,0.25);
+  --sel:rgba(217,120,0,0.08);
+  --kr:#D97800; --kn:#888; --kd:#2A8A2A; --kp:#B86800;
+}
+[data-theme="dark"] {
+  --bg:#0F0F0F; --sf:#141414; --sf2:#131313; --sf3:#1A1A1A;
+  --ln:rgba(255,255,255,0.08); --ln2:rgba(255,255,255,0.05);
+  --tx:#E8E8E3; --dm:#8A8A8A; --mt:#5A5A5A;
+  --am:#FF9E00; --gd:#FFD700; --gn:#87D787; --er:#FF5F5F;
+  --am10:rgba(255,158,0,0.10); --am25:rgba(255,158,0,0.25);
+  --gn10:rgba(135,215,135,0.10); --gn25:rgba(135,215,135,0.25);
+  --sel:rgba(255,158,0,0.07);
+  --kr:#FF9E00; --kn:#6A6A6A; --kd:#87D787; --kp:#FFD700;
+}
+/* ── Reset ───────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--tx);font:13px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font:inherit}
+a{color:var(--am)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--ln);border-radius:3px}
+::selection{background:var(--am25)}
+/* ── App shell ───────────────────────────────────────── */
+#root{display:flex;flex-direction:column}
+/* ── Header ──────────────────────────────────────────── */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;border-bottom:1px solid var(--ln);flex-shrink:0;gap:16px}
+.hdr-l{display:flex;align-items:baseline;gap:14px}
+.wordmark{font-size:15px;letter-spacing:3px;font-weight:600;color:var(--gd)}
+.mark{color:var(--am);margin-right:6px}
+.vaultpath{font-size:11px;color:var(--mt)}
+.hdr-r{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.entry-count{font-size:11px;color:var(--dm)}
+/* ── Pill toggle ─────────────────────────────────────── */
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:3px;font-size:11px;cursor:pointer;border:1px solid var(--ln);color:var(--dm);background:var(--sf);transition:color .15s,border-color .15s,background .15s}
+.pill:hover{border-color:var(--am);color:var(--tx)}
+.pill.on{border-color:var(--am25);background:var(--am10);color:var(--am)}
+.pill-dot{width:6px;height:6px;border-radius:50%;background:var(--mt);flex-shrink:0;transition:background .15s}
+.pill.on .pill-dot{background:var(--am)}
+/* ── Tabs ────────────────────────────────────────────── */
+.tabs{display:flex;align-items:center;gap:2px;padding:8px 20px;border-bottom:1px solid var(--ln);flex-shrink:0}
+.tab{padding:5px 14px;border-radius:3px;font-size:12px;color:var(--dm);letter-spacing:0.3px;transition:color .15s,background .15s}
+.tab:hover{color:var(--tx);background:var(--sf)}
+.tab.on{color:var(--am);background:var(--am10)}
+/* ── Panels ──────────────────────────────────────────── */
+.panels{flex:1;min-height:0;position:relative}
+.panel{position:absolute;inset:0;display:flex;flex-direction:column}
+.panel.hidden{display:none!important}
+/* ── Entries ─────────────────────────────────────────── */
+.entry-panel{flex-direction:row!important}
+.sidebar{width:360px;flex-shrink:0;border-right:1px solid var(--ln);display:flex;flex-direction:column;min-height:0}
+.sidebar-top{padding:12px 14px 10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--ln2);flex-shrink:0}
+.search-row{display:flex;gap:6px;position:relative}
+.search-wrap{position:relative;flex:1;display:flex;align-items:center}
+.q{width:100%;background:var(--sf);border:1px solid var(--ln);color:var(--tx);padding:6px 28px 6px 10px;border-radius:3px;font-size:12px;outline:none}
+.q:focus{border-color:var(--am)}
+.q::placeholder{color:var(--mt)}
+.q-clear{position:absolute;right:8px;color:var(--mt);font-size:14px;line-height:1;cursor:pointer;padding:2px 4px}
+.q-clear:hover{color:var(--er)}
+.q-key-hint{position:absolute;right:8px;color:var(--mt);font-size:10px;pointer-events:none;background:var(--sf2);padding:1px 4px;border-radius:2px;border:1px solid var(--ln)}
+.search-meta-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--mt);padding:0 2px}
+.search-count{font-size:11px;color:var(--dm)}
+.kind-chips{display:flex;gap:5px;flex-wrap:wrap}
+.kchip{padding:3px 8px;border:1px solid var(--ln);border-radius:10px;background:var(--sf);color:var(--dm);font-size:11px;cursor:pointer;transition:color .1s,border-color .1s,background .1s;display:inline-flex;align-items:center;gap:4px}
+.kchip:hover{border-color:var(--am);color:var(--tx)}
+.kchip.on{background:var(--am10);border-color:var(--am25);color:var(--am)}
+.kchip-count{font-size:10px;color:var(--mt);opacity:.85}
+.kchip.on .kchip-count{color:var(--am)}
+.tag-active{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dm);background:var(--sf2);padding:3px 8px;border-radius:3px}
+.tag-active-val{color:var(--am);font-weight:600}
+.tag-clear{color:var(--er);cursor:pointer;margin-left:auto}
+.tag-clear:hover{text-decoration:underline}
+.entry-list{flex:1;overflow-y:auto;min-height:0}
+.sidebar-footer{flex-shrink:0;padding:8px 14px;border-top:1px solid var(--ln2);display:flex;align-items:center;gap:10px;font-size:10px;color:var(--mt);letter-spacing:0.3px}
+.sf-dot{width:4px;height:4px;border-radius:50%;background:var(--ln);flex-shrink:0}
+.erow{padding:12px 14px;border-bottom:1px solid var(--ln2);cursor:pointer;transition:background .1s}
+.erow:hover{background:var(--sf)}
+.erow.on{background:var(--sel);border-left:2px solid var(--am)}
+.erow-meta{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.erow-kind{font-size:10px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600}
+.erow-proj{font-size:10px;color:var(--mt);margin-left:auto;cursor:pointer}
+.erow-proj:hover{color:var(--am)}
+.erow-title{font-size:12px;color:var(--tx);line-height:1.35}
+.erow-tags{font-size:11px;color:var(--mt);margin-top:3px}
+.no-results{padding:28px 14px;color:var(--mt);font-size:12px;text-align:center;line-height:1.6}
+/* ── Detail ──────────────────────────────────────────── */
+.detail{flex:1;display:flex;flex-direction:row;min-height:0;overflow:hidden}
+.det-scroll{flex:1;overflow-y:auto;min-height:0}
+.sessions-panel{width:240px;flex-shrink:0;border-left:1px solid var(--ln);overflow-y:auto;padding:20px 16px;display:flex;flex-direction:column;gap:12px}
+.sp-hdr{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin-bottom:4px;flex-shrink:0}
+.sp-card{background:var(--sf);border:1px solid var(--ln2);border-radius:3px;padding:10px 12px;cursor:default}
+.sp-card-title{font-size:11px;color:var(--gd);font-weight:600;margin-bottom:4px;line-height:1.3}
+.sp-card-date{font-size:10px;color:var(--mt);margin-bottom:6px}
+.sp-card-summary{font-size:11px;color:var(--dm);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.sp-card-steps{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+.sp-step{font-size:10px;color:var(--dm);display:flex;gap:5px;line-height:1.4}
+.sp-step-arrow{color:var(--gn);flex-shrink:0}
+.status-view{padding:36px 40px;max-width:560px}
+.stat-lbl{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin-bottom:14px}
+.stat-nums{display:flex;gap:28px;margin-bottom:24px}
+.stat-num{font-size:28px;color:var(--gd);font-weight:600;line-height:1}
+.stat-sub{font-size:11px;color:var(--dm);margin-top:2px}
+.kind-bars{display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
+.kb-row-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
+.kb-track{height:4px;background:var(--sf2);border-radius:2px;overflow:hidden}
+.kb-fill{height:100%;border-radius:2px;transition:width .3s}
+.det-inner{padding:28px 32px;max-width:none}
+.det-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.kind-pill{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:2px 8px;border-radius:2px;font-weight:600}
+.det-proj{font-size:11px;color:var(--dm)}
+.det-date{font-size:11px;color:var(--mt);margin-left:auto}
+.det-conf{font-size:10px;color:var(--dm);margin-top:6px}
+.conf-track{height:3px;background:var(--sf2);border-radius:2px;overflow:hidden;width:180px;margin-top:4px}
+.conf-fill{height:100%;background:var(--am);border-radius:2px}
+.det-title{font-size:20px;color:var(--gd);font-weight:600;margin:12px 0 18px;line-height:1.35}
+.det-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px;margin-bottom:20px;align-items:center}
+.tag-chip{font-size:11px;color:var(--am);background:var(--am10);border:1px solid var(--am25);padding:3px 10px;border-radius:10px;display:inline-flex;align-items:center;gap:5px}
+.tag-rm{color:var(--er);font-size:11px;cursor:pointer;line-height:1;background:none;border:none;padding:0}
+.tag-rm:hover{opacity:.7}
+.kind-wrap{margin-top:14px;margin-bottom:2px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dm)}
+.kind-sel{background:var(--sf2);border:1px solid var(--am25);color:var(--am);padding:3px 7px;border-radius:3px;font-size:11px;outline:none}
+.tag-add-inp{width:72px;background:var(--sf2);border:1px dashed var(--ln);color:var(--tx);padding:2px 7px;border-radius:10px;font-size:11px;outline:none}
+.tag-add-inp:focus{border-color:var(--am)}
+.det-body{padding-top:22px;margin-top:4px;border-top:1px solid var(--ln2);line-height:1.75;font-size:13px}
+.det-body h2{font-size:16px;color:var(--gd);margin:18px 0 8px}
+.det-body h3{font-size:14px;color:var(--am);margin:14px 0 6px}
+.det-body p{margin-bottom:10px}
+.det-body ul,.det-body ol{margin:0 0 10px 20px}
+.det-body li{margin-bottom:3px}
+.det-body code{background:var(--sf2);padding:1px 5px;border-radius:2px;font-size:12px}
+.det-body pre{background:var(--sf2);padding:12px;border-radius:3px;overflow-x:auto;margin-bottom:12px}
+.det-body pre code{background:none;padding:0}
+.det-body hr{border:none;border-top:1px solid var(--ln);margin:14px 0}
+.det-body strong{font-weight:600}
+.det-body em{font-style:italic;color:var(--dm)}
+.det-body blockquote{border-left:2px solid var(--am);padding-left:12px;color:var(--dm);margin:10px 0}
+.wikilink{color:var(--am);cursor:pointer;text-decoration:underline dotted;transition:color .1s}
+.wikilink:hover{text-decoration:underline;color:var(--gd)}
+.det-section{margin-top:22px;padding-top:16px;border-top:1px solid var(--ln2)}
+.det-sec-title{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin-bottom:10px}
+.src-card{padding:10px 12px;background:var(--sf);border:1px solid var(--ln2);border-radius:3px;margin-bottom:7px}
+.src-title{font-size:12px;color:var(--am);text-decoration:none}
+.src-snip{font-size:11px;color:var(--mt);margin-top:3px}
+.bl-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--sf);border:1px solid var(--ln2);border-radius:3px;margin-bottom:6px;cursor:pointer;transition:background .1s,border-color .1s}
+.bl-row:hover{border-color:var(--am25);background:var(--sel)}
+.bl-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.bl-title{font-size:12px}
+.export-btn{padding:5px 12px;border:1px solid var(--ln);border-radius:3px;font-size:11px;color:var(--dm);cursor:pointer;background:var(--sf);transition:border-color .15s,color .15s}
+.export-btn:hover{border-color:var(--am);color:var(--am)}
+/* ── Skeleton ────────────────────────────────────────── */
+@keyframes pulse { 0%,100%{opacity:.45} 50%{opacity:.85} }
+.skel{animation:pulse 1.4s ease-in-out infinite;background:var(--sf2);border-radius:3px}
+.skel-title{height:22px;width:60%;margin:10px 0 14px}
+.skel-p{height:14px;width:100%;margin-bottom:8px}
+.skel-p.short{width:40%}
+/* ── Graph ───────────────────────────────────────────── */
+.graph-wrap{flex:1;min-height:0;position:relative;width:100%;height:100%;overflow:hidden}
+.graph-canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
+.graph-legend{position:absolute;top:16px;left:16px;background:var(--sf);border:1px solid var(--ln);border-radius:4px;padding:10px 12px;font-size:11px;color:var(--dm);transition:all .2s;z-index:2}
+.graph-legend.collapsed{padding:6px 10px;cursor:pointer}
+.graph-legend.collapsed:hover{border-color:var(--am25);color:var(--am)}
+.legend-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase}
+.legend-toggle{cursor:pointer;font-size:11px;color:var(--mt)}
+.legend-toggle:hover{color:var(--tx)}
+.legend-sec{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin:8px 0 4px}
+.legend-row{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.legend-edge{width:14px;height:2px;flex-shrink:0}
+.legend-node{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.graph-controls{position:absolute;top:16px;right:16px;display:flex;gap:8px;z-index:2}
+.graph-reset{background:var(--sf);border:1px solid var(--am25);color:var(--am);font-size:11px;padding:5px 12px;border-radius:3px}
+.graph-reset:hover{background:var(--am10)}
+.graph-hint{position:absolute;bottom:14px;left:16px;font-size:10px;color:var(--mt);pointer-events:none}
+/* ── Tags ────────────────────────────────────────────── */
+.tags-wrap{max-width:680px;margin:28px auto;padding:0 24px;display:flex;flex-direction:column;gap:12px}
+.tags-filter-row{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.tags-count{font-size:11px;color:var(--mt);flex-shrink:0}
+.tags-search{background:var(--sf);border:1px solid var(--ln);color:var(--tx);padding:5px 10px;border-radius:3px;font-size:12px;outline:none;flex:1}
+.tags-search:focus{border-color:var(--am)}
+.tags-search::placeholder{color:var(--mt)}
+.tags-inner{display:flex;flex-direction:column;gap:7px}
+.tag-bar-row{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid var(--ln2);border-radius:3px;cursor:pointer;background:var(--sf);transition:background .1s,border-color .1s}
+.tag-bar-row:hover{border-color:var(--am25);background:var(--sel)}
+.tag-name{font-size:13px;color:var(--am);width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag-bar-track{flex:1;height:5px;background:var(--sf2);border-radius:3px;overflow:hidden}
+.tag-bar-fill{height:100%;background:var(--am);border-radius:3px}
+.tag-count{font-size:11px;color:var(--dm);width:32px;text-align:right;flex-shrink:0}
+/* ── Identity ────────────────────────────────────────── */
+.id-inner{max-width:920px;margin:28px auto;padding:0 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.id-card{background:var(--sf);border:1px solid var(--ln);border-radius:3px;padding:18px 20px}
+.id-card.wide{grid-column:1/span 2}
+.id-lbl{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin-bottom:12px}
+.id-name{font-size:17px;color:var(--gd);font-weight:600;margin-bottom:6px}
+.id-field{font-size:12px;color:var(--dm);margin-bottom:12px}
+.id-row{font-size:12px;margin-bottom:5px}
+.id-key{color:var(--mt)}
+.id-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.id-chip-skill{font-size:11px;color:var(--gn);background:var(--gn10);border:1px solid var(--gn25);padding:2px 9px;border-radius:10px}
+.id-chip-trait{font-size:11px;color:var(--am);background:var(--am10);border:1px solid var(--am25);padding:2px 9px;border-radius:10px}
+.sess-title{font-size:14px;color:var(--gd);font-weight:600;margin-bottom:6px}
+.sess-summary{font-size:12px;color:var(--tx);line-height:1.6;margin-bottom:14px}
+.sess-step{display:flex;gap:8px;font-size:12px;color:var(--tx);margin-bottom:5px}
+.sess-arrow{color:var(--gn)}
+.sess-hist-item{padding:10px 12px;border:1px solid var(--ln2);border-radius:3px;margin-bottom:8px;background:var(--sf2)}
+.sess-hist-date{font-size:10px;color:var(--mt);margin-bottom:3px}
+.sess-hist-title{font-size:12px;font-weight:600;color:var(--gd);margin-bottom:4px}
+.sess-hist-snip{font-size:11px;color:var(--dm);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sess-hist-steps{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+.sess-hist-step{font-size:10px;color:var(--dm);display:flex;gap:5px;line-height:1.4}
+.sess-hist-step-arrow{color:var(--gn);flex-shrink:0}
+.id-empty{font-size:12px;color:var(--mt);padding:16px 0}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="importmap">
+{"imports":{"preact":"/vendor/preact.js","preact/hooks":"/vendor/hooks.js"}}
+</script>
+<script type="module">
+import { h, render, Fragment } from '/vendor/preact.js';
+import { useState, useEffect, useRef, useCallback, useMemo } from '/vendor/hooks.js';
+import htm from '/vendor/htm.js';
+
+const html = htm.bind(h);
+
+// ── Utilities ────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function api(path) { return fetch(path).then(r => r.json()); }
+function kindColor(k) {
+  return { research:'var(--kr)', note:'var(--kn)', decision:'var(--kd)', pattern:'var(--kp)' }[k] ?? 'var(--mt)';
+}
+
+// ── Markdown renderer ────────────────────────────────────
+function inlineMd(raw) {
+  let s = esc(raw);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*\s][^*]*)\*/g, '<em>$1</em>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, `<span class="wikilink" data-target="$1">$2 &#8599;</span>`);
+  s = s.replace(/\[\[([^\]]+)\]\]/g, `<span class="wikilink" data-target="$1">$1 &#8599;</span>`);
+  return s;
+}
+
+function mdRender(raw) {
+  const lines = (raw || '').split('\n');
+  const out = [];
+  let inList = false, inCode = false;
+  const codeBuf = [];
+
+  for (const line of lines) {
+    if (line.startsWith('```')) {
+      if (inCode) {
+        out.push(`<pre><code>${codeBuf.map(esc).join('\n')}</code></pre>`);
+        codeBuf.length = 0; inCode = false;
+      } else { inCode = true; }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+    const tr = line.trimStart();
+    if (tr.startsWith('## ')) {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(`<h2>${inlineMd(tr.slice(3))}</h2>`);
+    } else if (tr.startsWith('# ')) {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(`<h3>${inlineMd(tr.slice(2))}</h3>`);
+    } else if (tr.startsWith('> ')) {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(`<blockquote>${inlineMd(tr.slice(2))}</blockquote>`);
+    } else if (tr.startsWith('- ') || tr.startsWith('* ')) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push(`<li>${inlineMd(tr.slice(2))}</li>`);
+    } else if (tr === '---') {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push('<hr>');
+    } else if (tr === '') {
+      if (inList) { out.push('</ul>'); inList = false; }
+    } else {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(`<p>${inlineMd(line)}</p>`);
+    }
+  }
+  if (inList) out.push('</ul>');
+  if (inCode) out.push(`<pre><code>${codeBuf.map(esc).join('\n')}</code></pre>`);
+  return out.join('\n');
+}
+
+// ── Graph physics ────────────────────────────────────────
+const GRAPH_COLORS = {
+  light: { bg:'#F5F4EF', nodes:{research:'#D97800',note:'#888888',decision:'#2A8A2A',pattern:'#B86800'}, edges:{wikilink:'#D97800',project:'#2A8A2A',tag:'rgba(0,0,0,0.12)'}, label:'#1A1A1A', ring:'rgba(0,0,0,0.2)' },
+  dark:  { bg:'#0F0F0F', nodes:{research:'#FF9E00',note:'#6A6A6A',decision:'#87D787',pattern:'#FFD700'}, edges:{wikilink:'#FF9E00',project:'#87D787',tag:'rgba(255,255,255,0.15)'}, label:'#E8E8E3', ring:'rgba(255,255,255,0.2)' },
+};
+
+// ── Pill component ───────────────────────────────────────
+function Pill({ label, active, onClick }) {
+  return html`
+    <button class=${`pill${active ? ' on' : ''}`} onClick=${onClick}>
+      <span class="pill-dot"></span>${label}
+    </button>`;
+}
+
+// ── Header ───────────────────────────────────────────────
+function Header({ theme, onTheme, writeCfg, writeOn, onWrite, semanticCfg, semanticOn, onSemantic, entryCount }) {
+  return html`
+    <div class="hdr">
+      <div class="hdr-l">
+        <div><span class="mark">◈</span><span class="wordmark">S A R I P A T I</span></div>
+        <span class="vaultpath">~/.saripati/vault.db</span>
+      </div>
+      <div class="hdr-r">
+        ${entryCount != null && html`<span class="entry-count">${entryCount} entries</span>`}
+        <${Pill} label=${theme} active=${theme === 'dark'} onClick=${() => onTheme(theme === 'light' ? 'dark' : 'light')}/>
+        ${semanticCfg && html`<${Pill} label="--semantic" active=${semanticOn} onClick=${onSemantic}/>`}
+        ${writeCfg && html`<${Pill} label="--write" active=${writeOn} onClick=${onWrite}/>`}
+      </div>
+    </div>`;
+}
+
+// ── Tabs ─────────────────────────────────────────────────
+const TABS = ['entries', 'graph', 'tags', 'identity'];
+function Tabs({ tab, onTab }) {
+  return html`
+    <div class="tabs">
+      ${TABS.map(t => html`
+        <button key=${t} class=${`tab${tab === t ? ' on' : ''}`} onClick=${() => onTab(t)}>
+          ${t.charAt(0).toUpperCase() + t.slice(1)}
+        </button>`)}
+    </div>`;
+}
+
+// ── Entry row ─────────────────────────────────────────────
+function EntryRow({ entry, selected, onSelect, onProjectClick }) {
+  const rowRef = useRef(null);
+  const tags = (entry.tags || []).slice(0, 4).map(t => `#${t}`).join(' ');
+
+  useEffect(() => {
+    if (selected && rowRef.current) {
+      rowRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [selected]);
+
+  return html`
+    <div ref=${rowRef} class=${`erow${selected ? ' on' : ''}`} onClick=${() => onSelect(entry.id)}>
+      <div class="erow-meta">
+        <span class="erow-kind" style=${{ color: kindColor(entry.kind) }}>${entry.kind}</span>
+        ${entry.project && html`
+          <span class="erow-proj" title="Filter by @${entry.project}"
+            onClick=${e => { e.stopPropagation(); onProjectClick && onProjectClick(entry.project); }}>
+            @${entry.project}
+          </span>`}
+      </div>
+      <div class="erow-title">${entry.title}</div>
+      ${tags && html`<div class="erow-tags">${tags}</div>`}
+    </div>`;
+}
+
+// ── Sidebar ───────────────────────────────────────────────
+function Sidebar({ query, onQuery, kindFilter, onKind, tagFilter, onTagClear, projectFilter, onProjectClick, entries, selectedId, onSelect, onExport, status, totalCount }) {
+  const KINDS = ['research', 'note', 'decision', 'pattern'];
+  const inputRef = useRef(null);
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === '/' && document.activeElement !== inputRef.current && !['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const counts = status?.byKind || {};
+
+  return html`
+    <div class="sidebar">
+      <div class="sidebar-top">
+        <div class="search-row">
+          <div class="search-wrap">
+            <input ref=${inputRef} class="q" type="text" placeholder="search entries…" value=${query}
+              onFocus=${() => setIsFocused(true)}
+              onBlur=${() => setIsFocused(false)}
+              onInput=${e => onQuery(e.target.value)} autocomplete="off"/>
+            ${query
+              ? html`<button class="q-clear" title="Clear query" onClick=${() => onQuery('')}>×</button>`
+              : (!isFocused && html`<span class="q-key-hint">/</span>`)}
+          </div>
+          <button class="export-btn" title="Export markdown view" onClick=${onExport}>export ↓</button>
+        </div>
+        <div class="search-meta-row">
+          <span class="search-count">
+            ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}${totalCount && entries.length !== totalCount ? ` (of ${totalCount})` : ''}
+          </span>
+        </div>
+        <div class="kind-chips">
+          ${KINDS.map(k => {
+            const count = counts[k];
+            return html`
+              <button key=${k} class=${`kchip${kindFilter === k ? ' on' : ''}`}
+                onClick=${() => onKind(k)}>
+                ${k} ${count != null ? html`<span class="kchip-count">${count}</span>` : ''}
+              </button>`;
+          })}
+        </div>
+        ${tagFilter && html`
+          <div class="tag-active">
+            tag: <span class="tag-active-val">#${tagFilter}</span>
+            <span class="tag-clear" onClick=${onTagClear}>clear ×</span>
+          </div>`}
+        ${projectFilter && html`
+          <div class="tag-active">
+            project: <span class="tag-active-val">@${projectFilter}</span>
+            <span class="tag-clear" onClick=${() => onProjectClick(projectFilter)}>clear ×</span>
+          </div>`}
+      </div>
+      <div class="entry-list">
+        ${!entries.length
+          ? html`<div class="no-results">no entries match filters${query ? ` for "${query}"` : ''}</div>`
+          : entries.map(e => html`
+            <${EntryRow} key=${e.id} entry=${e} selected=${selectedId === e.id}
+              onSelect=${onSelect} onProjectClick=${onProjectClick}/>`)}
+      </div>
+      <div class="sidebar-footer">
+        <span>${status?.total ?? '–'} entries</span>
+        <span class="sf-dot"></span>
+        <span>${status?.projects ?? '–'} projects</span>
+        <span class="sf-dot"></span>
+        <span>${status?.sessions ?? '–'} sessions</span>
+        ${status?.lastUpdated ? html`
+          <span class="sf-dot"></span>
+          <span>updated ${status.lastUpdated.slice(0,10)}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── Corpus status ─────────────────────────────────────────
+function CorpusStatus({ status }) {
+  if (!status) return html`<div class="status-view"><div class="stat-lbl">loading…</div></div>`;
+  const total = status.total || 0;
+  const max = Math.max(1, total);
+  const kinds = [
+    { k: 'research', label: 'research' },
+    { k: 'note', label: 'note' },
+    { k: 'decision', label: 'decision' },
+    { k: 'pattern', label: 'pattern' },
+  ];
+  return html`
+    <div class="status-view">
+      <div class="stat-lbl">Corpus Status</div>
+      <div class="stat-nums">
+        <div><div class="stat-num">${total}</div><div class="stat-sub">entries</div></div>
+        <div><div class="stat-num">${status.projects || 0}</div><div class="stat-sub">projects</div></div>
+        <div><div class="stat-num">${status.sessions || 0}</div><div class="stat-sub">sessions</div></div>
+      </div>
+      <div class="kind-bars">
+        ${kinds.map(({ k, label }) => {
+          const n = (status.byKind || {})[k] || 0;
+          const pct = Math.round((n / max) * 100);
+          return html`
+            <div key=${k}>
+              <div class="kb-row-label">
+                <span style=${{ color: kindColor(k) }}>${label}</span>
+                <span style="color:var(--mt)">${n}</span>
+              </div>
+              <div class="kb-track">
+                <div class="kb-fill" style=${{ width: `${pct}%`, background: kindColor(k) }}></div>
+              </div>
+            </div>`;
+        })}
+      </div>
+      ${status.lastUpdated && html`<div style="font-size:11px;color:var(--mt)">last updated ${status.lastUpdated.slice(0,10)}</div>`}
+    </div>`;
+}
+
+// ── Sessions panel (right sidebar in entry detail view) ───
+function SessionsPanel({ sessions }) {
+  if (!sessions || !sessions.length) return html`
+    <div class="sessions-panel">
+      <div class="sp-hdr">Sessions</div>
+      <div style="font-size:11px;color:var(--mt)">No sessions yet.</div>
+    </div>`;
+
+  return html`
+    <div class="sessions-panel">
+      <div class="sp-hdr">Recent Sessions</div>
+      ${sessions.map((s, i) => html`
+        <div key=${i} class="sp-card">
+          <div class="sp-card-title">${s.title}</div>
+          <div class="sp-card-date">${(s.created_at || '').slice(0,10)}</div>
+          <div class="sp-card-summary">${s.summary}</div>
+          ${s.next_steps && s.next_steps.length > 0 && html`
+            <div class="sp-card-steps">
+              ${s.next_steps.slice(0,3).map((step, j) => html`
+                <div key=${j} class="sp-step">
+                  <span class="sp-step-arrow">▸</span>
+                  <span>${step}</span>
+                </div>`)}
+            </div>`}
+        </div>`)}
+    </div>`;
+}
+
+// ── Entry detail ──────────────────────────────────────────
+function EntryDetail({ entryId, onWikiClick, onBacklinkClick, allEntries }) {
+  const [data, setData] = useState(null);
+  const [backlinks, setBacklinks] = useState([]);
+  const [newTag, setNewTag] = useState('');
+  const [loading, setLoading] = useState(false);
+  const bodyRef = useRef(null);
+
+  useEffect(() => {
+    if (!entryId) return;
+    setLoading(true);
+    setData(null);
+    Promise.all([api(`/api/entry/${entryId}`), api(`/api/backlinks/${entryId}`)])
+      .then(([e, bls]) => {
+        setData(e);
+        setBacklinks(bls || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [entryId]);
+
+  useEffect(() => {
+    if (!bodyRef.current || !data) return;
+    bodyRef.current.innerHTML = mdRender(data.body || '');
+    bodyRef.current.querySelectorAll('.wikilink').forEach(span => {
+      span.addEventListener('click', () => {
+        const target = span.dataset.target || '';
+        onWikiClick(target);
+      });
+    });
+  }, [data]);
+
+  if (loading || !data) {
+    return html`
+      <div class="det-inner">
+        <div class="skel" style="height:14px;width:120px;margin-bottom:12px"></div>
+        <div class="skel skel-title"></div>
+        <div class="skel skel-p" style="margin-top:20px"></div>
+        <div class="skel skel-p"></div>
+        <div class="skel skel-p short"></div>
+      </div>`;
+  }
+
+  const removeTag = async (tag) => {
+    const updated = (data.tags || []).filter(t => t !== tag);
+    await fetch(`/api/entry/${entryId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tags: updated }) });
+    setData({ ...data, tags: updated });
+  };
+
+  const addTag = async (e) => {
+    if (e.key !== 'Enter' || !newTag.trim()) return;
+    const updated = [...(data.tags || []), newTag.trim()];
+    await fetch(`/api/entry/${entryId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tags: updated }) });
+    setData({ ...data, tags: updated });
+    setNewTag('');
+  };
+
+  const changeKind = async (kind) => {
+    await fetch(`/api/entry/${entryId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind }) });
+    setData({ ...data, kind });
+  };
+
+  return html`
+    <div class="det-inner">
+      <div class="det-meta">
+        <span class="kind-pill" style=${{ background: kindColor(data.kind) + '22', color: kindColor(data.kind) }}>${data.kind}</span>
+        ${data.project && html`<span class="det-proj">@${data.project}</span>`}
+        <span class="det-date">${(data.created_at || '').slice(0,10)}</span>
+      </div>
+      <div class="det-title">${data.title}</div>
+      ${data.confidence != null && html`
+        <div class="det-conf">
+          CONFIDENCE — ${Math.round(data.confidence * 100)}%
+          <div class="conf-track"><div class="conf-fill" style=${{ width: `${data.confidence*100}%` }}></div></div>
+        </div>`}
+      <div class="kind-wrap">
+        <span style="color:var(--mt)">kind:</span>
+        <select class="kind-sel" value=${data.kind} onChange=${e => changeKind(e.target.value)}>
+          ${['research','note','decision','pattern'].map(k => html`<option key=${k} value=${k}>${k}</option>`)}
+        </select>
+        <span style="font-size:10px;color:var(--mt)">markdown edits → Obsidian + import</span>
+      </div>
+      <div class="det-tags">
+        ${(data.tags || []).map(t => html`
+          <span key=${t} class="tag-chip">
+            #${t}
+            <button class="tag-rm" title="Remove tag" onClick=${() => removeTag(t)}>×</button>
+          </span>`)}
+        <input class="tag-add-inp" placeholder="+ tag" value=${newTag}
+          onInput=${e => setNewTag(e.target.value)}
+          onKeyDown=${addTag}/>
+      </div>
+      <div class="det-body" ref=${bodyRef}></div>
+      ${(data.sources || []).length > 0 && html`
+        <div class="det-section">
+          <div class="det-sec-title">Sources</div>
+          ${data.sources.map((s, i) => html`
+            <div key=${i} class="src-card">
+              ${s.url
+                ? html`<a class="src-title" href=${s.url} target="_blank" rel="noopener">${s.title || s.url}</a>`
+                : html`<span class="src-title">${s.title || 'source'}</span>`}
+              ${s.snippet && html`<div class="src-snip">${s.snippet}</div>`}
+            </div>`)}
+        </div>`}
+      ${backlinks.length > 0 && html`
+        <div class="det-section">
+          <div class="det-sec-title">Backlinks</div>
+          ${backlinks.map(bl => html`
+            <div key=${bl.id} class="bl-row" onClick=${() => onBacklinkClick(bl.id)}>
+              <span class="bl-dot" style=${{ background: kindColor(bl.kind) }}></span>
+              <span class="bl-title">${bl.title}</span>
+            </div>`)}
+        </div>`}
+      <div style="margin-top:24px">
+        <button class="export-btn" onClick=${() => { window.location = `/api/export`; }}>export view ↓</button>
+      </div>
+    </div>`;
+}
+
+// ── Entries panel ─────────────────────────────────────────
+function EntriesPanel({ active, status, selectedId, onSelectId, query, onQuery, kindFilter, onKind, tagFilter, onTagFilter }) {
+  const [entries, setEntries] = useState([]);
+  const [projectFilter, setProjectFilter] = useState('');
+  const debounce = useRef(null);
+
+  const loadEntries = useCallback((q, kind, tag, project) => {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (kind) p.set('kind', kind);
+    if (tag) p.set('tag', tag);
+    if (project) p.set('project', project);
+    p.set('semantic', '1');
+    api(`/api/entries?${p}`).then(data => setEntries(data || []));
+  }, []);
+
+  useEffect(() => {
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => loadEntries(query, kindFilter, tagFilter, projectFilter), 180);
+  }, [query, kindFilter, tagFilter, projectFilter]);
+
+  const handleProjectClick = (project) => {
+    setProjectFilter(f => f === project ? '' : project);
+    onKind(''); // clear kind filter when filtering by project
+    onSelectId(null);
+  };
+
+  const handleExport = () => {
+    const p = new URLSearchParams();
+    if (query) p.set('q', query);
+    if (kindFilter) p.set('kind', kindFilter);
+    if (tagFilter) p.set('tag', tagFilter);
+    p.set('semantic', '1');
+    window.location = `/api/export?${p}`;
+  };
+
+  const handleWiki = (target) => {
+    const normalized = target.toLowerCase().trim();
+    const match = entries.find(e => e.title.toLowerCase().trim() === normalized);
+    if (match) { onSelectId(match.id); }
+    else { onQuery(target); onSelectId(null); }
+  };
+
+  return html`
+    <div class=${`panel entry-panel${active ? '' : ' hidden'}`}>
+      <${Sidebar}
+        query=${query} onQuery=${onQuery}
+        kindFilter=${kindFilter} onKind=${onKind}
+        tagFilter=${tagFilter} onTagClear=${() => onTagFilter('')}
+        projectFilter=${projectFilter} onProjectClick=${handleProjectClick}
+        entries=${entries} selectedId=${selectedId} onSelect=${onSelectId}
+        onExport=${handleExport} status=${status} totalCount=${status?.total}/>
+      <div class="detail">
+        ${selectedId ? html`
+          <div class="det-scroll">
+            <${EntryDetail} entryId=${selectedId} onWikiClick=${handleWiki} onBacklinkClick=${onSelectId} allEntries=${entries}/>
+          </div>
+          <${SessionsPanel} sessions=${status?.sessions_recent}/>
+        ` : html`
+          <div class="det-scroll">
+            <${CorpusStatus} status=${status}/>
+          </div>`}
+      </div>
+    </div>`;
+}
+
+// ── Graph panel ───────────────────────────────────────────
+function GraphPanel({ active, theme, selectedId, onSelect }) {
+  const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [legendOpen, setLegendOpen] = useState(true);
+  const G = useRef({ nodes:[], edges:[], raf:null, dragging:null, dragStart:null, hovered:null, ctx:null });
+
+  const initGraph = useCallback((canvas, data) => {
+    const W = canvas.width;
+    const H = canvas.height;
+    const ctx = canvas.getContext('2d');
+    G.current.ctx = ctx;
+
+    // Spread nodes over a larger area so repulsion doesn't blast them on frame 1.
+    G.current.nodes = (data.nodes || []).slice(0, 300).map((n, i, arr) => {
+      const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
+      const r = Math.min(W, H) * 0.42;
+      return { id: n.id, title: n.title, kind: n.kind,
+        x: W/2 + Math.cos(angle)*r, y: H/2 + Math.sin(angle)*r,
+        vx:0, vy:0, pinned:false };
+    });
+    G.current.edges = (data.edges || []).slice(0, 600);
+    G.current.dragging = null;
+    G.current.dragStart = null;
+
+    // Pre-warm without noise: spread nodes from the initial circle before the
+    // first visible frame so they don't blast apart on load.
+    for (let t = 0; t < 120; t++) physicsStep(canvas, G.current, false);
+
+    if (G.current.raf) cancelAnimationFrame(G.current.raf);
+    tick(canvas, G.current, selectedId);
+  }, [selectedId]);
+
+  // Load graph data
+  useEffect(() => {
+    if (!active || !canvasRef.current) return;
+    api('/api/graph').then(data => {
+      if (canvasRef.current) initGraph(canvasRef.current, data);
+    });
+    return () => { if (G.current.raf) cancelAnimationFrame(G.current.raf); };
+  }, [active]);
+
+  // Dynamic resize observer to prevent 150px canvas collapse
+  useEffect(() => {
+    if (!wrapRef.current || !canvasRef.current) return;
+    const resize = () => {
+      const w = wrapRef.current.clientWidth;
+      const h = wrapRef.current.clientHeight;
+      if (w > 0 && h > 0 && (canvasRef.current.width !== w || canvasRef.current.height !== h)) {
+        canvasRef.current.width = w;
+        canvasRef.current.height = h;
+        if (G.current.ctx) {
+          G.current.settled = false;
+          drawGraph(canvasRef.current, G.current, selectedId);
+        }
+      }
+    };
+    const ro = new ResizeObserver(resize);
+    ro.observe(wrapRef.current);
+    resize();
+    return () => ro.disconnect();
+  }, [active]);
+
+  useEffect(() => {
+    if (G.current.ctx) drawGraph(canvasRef.current, G.current, selectedId);
+  }, [selectedId, theme]);
+
+  const resetGraph = () => {
+    if (!canvasRef.current || !G.current.nodes.length) return;
+    const canvas = canvasRef.current;
+    const W = canvas.width || 800;
+    const H = canvas.height || 600;
+    G.current.nodes.forEach((n, i, arr) => {
+      const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
+      n.x = W/2 + Math.cos(angle) * Math.min(W,H) * 0.42;
+      n.y = H/2 + Math.sin(angle) * Math.min(W,H) * 0.42;
+      n.vx = 0; n.vy = 0; n.pinned = false;
+    });
+    // Pre-warm without noise so reset doesn't blast apart.
+    for (let t = 0; t < 120; t++) physicsStep(canvas, G.current, false);
+  };
+
+  const onMouseDown = useCallback(e => {
+    const pos = canvasPos(e, canvasRef.current);
+    const hit = hitNode(pos, G.current.nodes);
+    if (hit) {
+      hit.pinned = true;
+      G.current.dragging = hit;
+      G.current.dragStart = { x: pos.x, y: pos.y }; // record for click-vs-drag
+      G.current.settled = false;
+    }
+  }, []);
+
+  const onMouseMove = useCallback(e => {
+    const pos = canvasPos(e, canvasRef.current);
+    if (G.current.dragging) {
+      G.current.dragging.x = pos.x;
+      G.current.dragging.y = pos.y;
+      G.current.dragging.vx = 0;
+      G.current.dragging.vy = 0;
+      return;
+    }
+    G.current.hovered = hitNode(pos, G.current.nodes);
+  }, [selectedId]);
+
+  const onMouseUp = useCallback(e => {
+    if (!G.current.dragging) return;
+    const pos = canvasPos(e, canvasRef.current);
+    const start = G.current.dragStart || pos;
+    const dist = Math.sqrt((pos.x - start.x) ** 2 + (pos.y - start.y) ** 2);
+    const id = G.current.dragging.id;
+    G.current.dragging.pinned = false;
+    G.current.dragging = null;
+    G.current.dragStart = null;
+    // Only navigate away on a genuine click (< 8px movement).
+    // A drag just releases the node and stays on the graph.
+    if (dist < 8) onSelect(id);
+    // drag: just release — physics keeps running naturally
+  }, [onSelect]);
+
+  return html`
+    <div class=${`panel${active ? '' : ' hidden'}`}>
+      <div ref=${wrapRef} class="graph-wrap">
+        <canvas class="graph-canvas" ref=${canvasRef}
+          onMouseDown=${onMouseDown} onMouseMove=${onMouseMove} onMouseUp=${onMouseUp}
+          onMouseLeave=${() => { G.current.hovered = null; G.current.dragging = null; }}/>
+      </div>
+      
+      <div class=${`graph-legend${legendOpen ? '' : ' collapsed'}`} onClick=${() => !legendOpen && setLegendOpen(true)}>
+        <div class="legend-hdr">
+          <span>Legend</span>
+          <span class="legend-toggle" onClick=${(e) => { e.stopPropagation(); setLegendOpen(o => !o); }}>
+            ${legendOpen ? '−' : '+'}
+          </span>
+        </div>
+        ${legendOpen && html`
+          <Fragment>
+            <div class="legend-sec">EDGES</div>
+            <div class="legend-row"><span class="legend-edge" style="background:var(--am)"></span>wikilink</div>
+            <div class="legend-row"><span class="legend-edge" style="background:var(--gn)"></span>project</div>
+            <div class="legend-row"><span class="legend-edge" style="background:rgba(128,128,128,0.5)"></span>tag</div>
+            <div class="legend-sec">NODES</div>
+            <div class="legend-row"><span class="legend-node" style="background:var(--kr)"></span>research</div>
+            <div class="legend-row"><span class="legend-node" style="background:var(--kd)"></span>decision</div>
+            <div class="legend-row"><span class="legend-node" style="background:var(--kp)"></span>pattern</div>
+            <div class="legend-row"><span class="legend-node" style="background:var(--kn)"></span>note</div>
+          </Fragment>`}
+      </div>
+      
+      <div class="graph-controls">
+        <button class="graph-reset" onClick=${resetGraph}>reset layout</button>
+      </div>
+      <div class="graph-hint">drag to rearrange · click node to inspect</div>
+    </div>`;
+}
+
+function canvasPos(e, canvas) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (canvas.width / r.width), y: (e.clientY - r.top) * (canvas.height / r.height) };
+}
+
+function hitNode(pos, nodes) {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if ((pos.x-n.x)**2 + (pos.y-n.y)**2 < 144) return n;
+  }
+  return null;
+}
+
+// Pure physics step — no drawing, no settled state.
+// NOISE keeps nodes breathing permanently; DAMP prevents runaway.
+function physicsStep(canvas, G, noisy) {
+  const REP=3800, SPR=0.014, DAMP=0.88, REST=125, GRAV=0.0025;
+  const NOISE = noisy ? 0.18 : 0;
+  const W = canvas.width, H = canvas.height;
+  const nodeById = id => G.nodes.find(n => n.id === id);
+
+  for (const e of G.edges) {
+    const s = nodeById(e.from), t = nodeById(e.to);
+    if (!s || !t) continue;
+    const dx = t.x-s.x, dy = t.y-s.y, d = Math.sqrt(dx*dx+dy*dy)||1;
+    const f = (d-REST)*SPR, fx = dx/d*f, fy = dy/d*f;
+    if (!s.pinned) { s.vx += fx; s.vy += fy; }
+    if (!t.pinned) { t.vx -= fx; t.vy -= fy; }
+  }
+
+  for (let i = 0; i < G.nodes.length; i++) {
+    const n = G.nodes[i];
+    if (n.pinned) continue;
+    let fx = (W/2 - n.x) * GRAV + (Math.random()-0.5)*NOISE;
+    let fy = (H/2 - n.y) * GRAV + (Math.random()-0.5)*NOISE;
+    for (let j = 0; j < G.nodes.length; j++) {
+      if (i===j) continue;
+      const m = G.nodes[j];
+      const dx = n.x-m.x, dy = n.y-m.y, d2 = dx*dx+dy*dy+1, d = Math.sqrt(d2);
+      fx += dx/d*REP/d2; fy += dy/d*REP/d2;
+    }
+    n.vx = (n.vx+fx)*DAMP; n.vy = (n.vy+fy)*DAMP;
+    n.x = Math.max(20, Math.min(W-20, n.x+n.vx));
+    n.y = Math.max(20, Math.min(H-20, n.y+n.vy));
+  }
+}
+
+// Always runs — physics never stops. Thermal noise keeps it alive.
+function tick(canvas, G, selectedId) {
+  physicsStep(canvas, G, true);
+  drawGraph(canvas, G, selectedId);
+  G.raf = requestAnimationFrame(() => tick(canvas, G, selectedId));
+}
+
+function drawGraph(canvas, G, selectedId) {
+  if (!canvas || !G.ctx) return;
+  const ctx = G.ctx, W = canvas.width, H = canvas.height;
+  const activeTheme = document.documentElement.getAttribute('data-theme') || 'light';
+  const col = GRAPH_COLORS[activeTheme] || GRAPH_COLORS.light;
+  const nodeById = id => G.nodes.find(n => n.id === id);
+
+  ctx.fillStyle = col.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  if (!G.nodes || G.nodes.length === 0) {
+    ctx.fillStyle = col.label;
+    ctx.font = '12px ui-monospace,monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('◈ No connected graph nodes found', W/2, H/2);
+    return;
+  }
+
+  ctx.save();
+  for (const e of G.edges) {
+    const s = nodeById(e.from), t = nodeById(e.to);
+    if (!s || !t) continue;
+    ctx.strokeStyle = col.edges[e.type] || col.edges.tag;
+    ctx.lineWidth = e.type === 'wikilink' ? 1.5 : 1;
+    ctx.globalAlpha = e.type === 'wikilink' ? 0.75 : 0.4;
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+
+  for (const n of G.nodes) {
+    const isSel = n.id === selectedId;
+    const r = isSel ? 9 : 6;
+    const hov = G.hovered?.id === n.id;
+    ctx.fillStyle = col.nodes[n.kind] || '#888';
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI*2); ctx.fill();
+    if (hov || isSel) {
+      ctx.strokeStyle = col.ring; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r+3, 0, Math.PI*2); ctx.stroke();
+      const lbl = n.title.length > 32 ? n.title.slice(0,32)+'…' : n.title;
+      ctx.font = '11px ui-monospace,monospace';
+      ctx.textAlign = 'left';
+      const tw = ctx.measureText(lbl).width;
+      ctx.fillStyle = activeTheme === 'dark' ? 'rgba(20,20,20,0.92)' : 'rgba(240,239,233,0.94)';
+      ctx.fillRect(n.x+12, n.y-10, tw+8, 18);
+      ctx.fillStyle = col.label;
+      ctx.fillText(lbl, n.x+16, n.y+3);
+    }
+  }
+}
+
+// ── Tags panel ────────────────────────────────────────────
+function TagsPanel({ active, onTagSelect }) {
+  const [tags, setTags] = useState([]);
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => { if (active) api('/api/tags').then(t => setTags(t || [])); }, [active]);
+
+  const filteredTags = useMemo(() => {
+    if (!filter.trim()) return tags;
+    const f = filter.toLowerCase().trim();
+    return tags.filter(t => t.tag.toLowerCase().includes(f));
+  }, [tags, filter]);
+
+  const max = useMemo(() => Math.max(1, tags[0]?.count || 1), [tags]);
+
+  return html`
+    <div class=${`panel${active ? '' : ' hidden'}`} style="overflow-y:auto">
+      <div class="tags-wrap">
+        <div class="tags-filter-row">
+          <span class="tags-count">${tags.length} unique tags</span>
+          <input class="tags-search" type="text" placeholder="filter tags…" value=${filter}
+            onInput=${e => setFilter(e.target.value)}/>
+        </div>
+        <div class="tags-inner">
+          ${!filteredTags.length && active && html`<div class="no-results">no tags match</div>`}
+          ${filteredTags.map(t => html`
+            <div key=${t.tag} class="tag-bar-row" onClick=${() => onTagSelect(t.tag)}>
+              <span class="tag-name">#${t.tag}</span>
+              <div class="tag-bar-track">
+                <div class="tag-bar-fill" style=${{ width:`${Math.round(t.count/max*100)}%` }}></div>
+              </div>
+              <span class="tag-count">${t.count}</span>
+            </div>`)}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Identity panel ────────────────────────────────────────
+function IdentityPanel({ active }) {
+  const [identity, setIdentity] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!active || loaded) return;
+    Promise.all([api('/api/identity'), api('/api/status')]).then(([id, st]) => {
+      setIdentity(id);
+      setSessions(st?.sessions_recent || []);
+      setLoaded(true);
+    });
+  }, [active]);
+
+  if (!loaded) return html`<div class=${`panel${active ? '' : ' hidden'}`}></div>`;
+
+  const prefs = identity?.user_prefs || {};
+  const skills = Array.isArray(prefs.skills) ? prefs.skills : (prefs.skills ? [prefs.skills] : []);
+  const cfg = identity?.companion_config || {};
+  const traits = Array.isArray(cfg.values) ? cfg.values : Array.isArray(cfg.traits) ? cfg.traits : [];
+  const latestSession = sessions[0] || null;
+  const pastSessions = sessions.slice(1);
+
+  return html`
+    <div class=${`panel${active ? '' : ' hidden'}`} style="overflow-y:auto">
+      <div class="id-inner">
+        ${!identity ? html`
+          <div class="id-card wide">
+            <div class="id-empty">No identity set. Run <strong>saripati onboard</strong> to personalize your vault.</div>
+          </div>` : html`
+          <div class="id-card">
+            <div class="id-lbl">Profile</div>
+            ${identity.user_name && html`<div class="id-name">${identity.user_name}</div>`}
+            ${identity.user_field && html`<div class="id-field">${identity.user_field}</div>`}
+            ${prefs.communication_style && html`<div class="id-row"><span class="id-key">style — </span>${prefs.communication_style}</div>`}
+            ${prefs.address && html`<div class="id-row"><span class="id-key">address as — </span>${prefs.address}</div>`}
+            ${prefs.language && html`<div class="id-row"><span class="id-key">language — </span>${prefs.language}</div>`}
+            ${skills.length > 0 && html`
+              <div class="id-chips">
+                ${skills.map(s => html`<span key=${s} class="id-chip-skill">${s}</span>`)}
+              </div>`}
+          </div>
+          <div class="id-card">
+            <div class="id-lbl">Companion Persona</div>
+            ${identity.companion_name
+              ? html`
+                <div class="id-name">${identity.companion_name}</div>
+                ${identity.companion_role && html`<div class="id-field">${identity.companion_role}</div>`}
+                ${identity.companion_tone && html`<div class="id-row"><span class="id-key">tone — </span>${identity.companion_tone}</div>`}
+                ${traits.length > 0 && html`
+                  <div class="id-chips">
+                    ${traits.map(t => html`<span key=${t} class="id-chip-trait">${t}</span>`)}
+                  </div>`}`
+              : html`<div class="id-empty">No companion set.</div>`}
+          </div>`}
+
+        ${latestSession ? html`
+          <div class="id-card wide">
+            <div class="id-lbl">Latest Session — ${(latestSession.created_at || '').slice(0,10)}</div>
+            <div class="sess-title">${latestSession.title}</div>
+            <div class="sess-summary">${latestSession.summary}</div>
+            ${(latestSession.next_steps || []).length > 0 && html`
+              <div class="det-sec-title" style="margin-bottom:8px">Next Steps</div>
+              ${latestSession.next_steps.map((s, i) => html`
+                <div key=${i} class="sess-step"><span class="sess-arrow">▸</span>${s}</div>`)}`}
+          </div>` : html`
+          <div class="id-card wide">
+            <div class="id-empty">No sessions recorded yet. Call <code>session_save</code> from your AI host.</div>
+          </div>`}
+
+        ${pastSessions.length > 0 && html`
+          <div class="id-card wide">
+            <div class="id-lbl">Session History — ${pastSessions.length} prior session${pastSessions.length > 1 ? 's' : ''}</div>
+            ${pastSessions.map(ps => html`
+              <div key=${ps.id || ps.title} class="sess-hist-item">
+                <div class="sess-hist-date">${(ps.created_at || '').slice(0,10)}</div>
+                <div class="sess-hist-title">${ps.title}</div>
+                <div class="sess-hist-snip">${ps.summary}</div>
+                ${(ps.next_steps || []).length > 0 && html`
+                  <div class="sess-hist-steps">
+                    ${ps.next_steps.slice(0,2).map((step, i) => html`
+                      <div key=${i} class="sess-hist-step">
+                        <span class="sess-hist-step-arrow">▸</span>
+                        <span>${step}</span>
+                      </div>`)}
+                  </div>`}
+              </div>`)}
+          </div>`}
+      </div>
+    </div>`;
+}
+
+// ── App root ──────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState('entries');
+  const [theme, setTheme] = useState(() => localStorage.getItem('saripati-theme') || 'light');
+  const [writeCfg, setWriteCfg] = useState(false);
+  const [writeOn, setWriteOn] = useState(true);
+  const [semanticCfg, setSemanticCfg] = useState(false);
+  const [semanticOn, setSemanticOn] = useState(true);
+  const [status, setStatus] = useState(null);
+
+  // Lifted shared navigation & filter state
+  const [selectedId, setSelectedId] = useState(null);
+  const [query, setQuery] = useState('');
+  const [kindFilter, setKindFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('saripati-theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    api('/api/config').then(c => {
+      if (c.writeMode) setWriteCfg(true);
+      if (c.semanticMode) {
+        setSemanticCfg(true);
+        setSemanticOn(true);
+      }
+    });
+    api('/api/status').then(setStatus);
+  }, []);
+
+  const handleTagSelect = (tag) => {
+    setTagFilter(tag);
+    setKindFilter('');
+    setSelectedId(null);
+    setTab('entries');
+  };
+
+  const handleGraphSelect = (id) => {
+    setSelectedId(id);
+    setTab('entries');
+  };
+
+  const handleKindSelect = (k) => {
+    setKindFilter(curr => curr === k ? '' : k);
+    setSelectedId(null);
+  };
+
+  return html`
+    <${Header}
+      theme=${theme} onTheme=${setTheme}
+      writeCfg=${writeCfg} writeOn=${writeOn} onWrite=${() => setWriteOn(w => !w)}
+      semanticCfg=${semanticCfg} semanticOn=${semanticOn} onSemantic=${() => setSemanticOn(s => !s)}
+      entryCount=${status?.total}/>
+    <${Tabs} tab=${tab} onTab=${setTab}/>
+    <div class="panels">
+      <${EntriesPanel}
+        active=${tab === 'entries'}
+        status=${status}
+        writeOn=${writeOn}
+        semanticOn=${semanticOn}
+        selectedId=${selectedId}
+        onSelectId=${setSelectedId}
+        query=${query}
+        onQuery=${setQuery}
+        kindFilter=${kindFilter}
+        onKind=${handleKindSelect}
+        tagFilter=${tagFilter}
+        onTagFilter=${setTagFilter}/>
+      <${GraphPanel}
+        active=${tab === 'graph'}
+        theme=${theme}
+        selectedId=${selectedId}
+        onSelect=${handleGraphSelect}/>
+      <${TagsPanel}
+        active=${tab === 'tags'}
+        onTagSelect=${handleTagSelect}/>
+      <${IdentityPanel}
+        active=${tab === 'identity'}/>
+    </div>`;
+}
+
+render(html`<${App}/>`, document.getElementById('root'));
+</script>
+</body>
+</html>

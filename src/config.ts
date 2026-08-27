@@ -19,6 +19,10 @@ export interface Paths {
   dataDir: string;
   dbPath: string;
   modelCacheDir: string;
+  /** Obsidian-compatible Markdown mirror of the vault (created on demand by export/import). */
+  profileDir: string;
+  /** One Markdown file per entry, under profileDir. */
+  memoryDir: string;
 }
 
 function parseDbFlag(argv: string[]): string | undefined {
@@ -39,8 +43,16 @@ export function resolvePaths(argv: string[] = process.argv.slice(2)): Paths {
     (process.env.SARIPATI_DB ? resolve(process.env.SARIPATI_DB) : join(dataDir, "vault.db"));
 
   const modelCacheDir = join(dataDir, "models");
+  const profileDir = join(dataDir, "profile");
+  const memoryDir = join(profileDir, "memory");
 
-  return { dataDir, dbPath, modelCacheDir };
+  return { dataDir, dbPath, modelCacheDir, profileDir, memoryDir };
+}
+
+/** Create the Markdown mirror directories. Called only by export/import — the
+ *  MCP hot path never pays for this. */
+export function ensureProfileDir(paths: Paths): void {
+  mkdirSync(paths.memoryDir, { recursive: true }); // recursive → also creates profileDir
 }
 
 export function ensureDataDir(paths: Paths): void {

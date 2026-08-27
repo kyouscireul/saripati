@@ -57,12 +57,31 @@ CREATE TABLE IF NOT EXISTS projects (
   updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS identity (
+  id               INTEGER PRIMARY KEY CHECK (id = 1),   -- singleton row
+  user_name        TEXT,
+  user_field       TEXT,
+  user_prefs       TEXT    NOT NULL DEFAULT '{}',   -- JSON: skills, comm style, address, language
+  companion_name   TEXT,
+  companion_role   TEXT,
+  companion_tone   TEXT,
+  companion_config TEXT    NOT NULL DEFAULT '{}',   -- JSON: extended persona (traits, protocols)
+  created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS vec_entries USING vec0(
   embedding float[384]
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS fts_entries USING fts5(
   title, body, tags
+);
+
+CREATE TABLE IF NOT EXISTS md_sync (
+  entry_id   INTEGER PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
+  md_hash    TEXT    NOT NULL,     -- hash of the last-synced content: the 3-way merge base
+  synced_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 `;
 

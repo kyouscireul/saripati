@@ -8,6 +8,9 @@ import { registerMemoryTools } from "./tools/memory.js";
 import { registerSessionTools } from "./tools/session.js";
 import { registerProjectTools } from "./tools/project.js";
 import { registerStatusTools } from "./tools/status.js";
+import { registerIdentityTools } from "./tools/identity.js";
+import { registerSyncTools } from "./tools/sync.js";
+import { banner, caps, VERSION } from "../term/theme.js";
 
 /**
  * Run the SARIPATI MCP server over stdio. This is the process an AI host spawns
@@ -20,6 +23,9 @@ import { registerStatusTools } from "./tools/status.js";
 export async function runMcp(argv: string[] = []): Promise<void> {
   const paths = resolvePaths(argv);
   const db = openDb(paths);
+
+  // Wordmark to stderr ONLY — stdout is the JSON-RPC transport and must stay pure.
+  process.stderr.write(`${banner(VERSION, caps(process.stderr))}\n`);
 
   // Front-load the model so the first tool call is fast and no load output
   // races the protocol handshake. Non-fatal if it fails (recall/save will retry).
@@ -35,13 +41,15 @@ export async function runMcp(argv: string[] = []): Promise<void> {
     );
   }
 
-  const server = new McpServer({ name: "saripati", version: "0.1.0" });
+  const server = new McpServer({ name: "saripati", version: VERSION });
 
   registerResearchTools(server, db);
   registerMemoryTools(server, db);
   registerSessionTools(server, db);
   registerProjectTools(server, db);
   registerStatusTools(server, db);
+  registerIdentityTools(server, db);
+  registerSyncTools(server, db, paths);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
