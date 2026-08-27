@@ -6,12 +6,13 @@ import { jsonResult } from "./_result.js";
 
 export function registerProjectTools(server: McpServer, db: DB): void {
   server.registerTool(
-    "project_upsert",
+    "project_update",
     {
-      title: "Upsert project",
+      title: "Update project",
       description:
-        "Register or update a project in the vault's registry. Metadata is merged (JSON patch), so " +
-        "you can add fields incrementally across calls.",
+        "Register or update a project in the vault's registry. Call it when a new project comes up or " +
+        "a known one changes (status, stack, path). Metadata is merged (JSON patch), so you can add " +
+        "fields incrementally across calls without clobbering earlier ones.",
       inputSchema: {
         name: z.string().min(1).describe("Unique project name (the key)."),
         path: z.string().optional().describe("Filesystem path."),

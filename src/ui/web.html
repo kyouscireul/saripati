@@ -14,7 +14,7 @@
   --am10:rgba(217,120,0,0.10); --am25:rgba(217,120,0,0.25);
   --gn10:rgba(42,138,42,0.10); --gn25:rgba(42,138,42,0.25);
   --sel:rgba(217,120,0,0.08);
-  --kr:#D97800; --kn:#888; --kd:#2A8A2A; --kp:#B86800;
+  --kr:#D97800; --kn:#888; --kd:#2A8A2A; --kp:#B86800; --kq:#3A6EA5; --km:#8A5CD9; --ki:#1F8A8A;
 }
 [data-theme="dark"] {
   --bg:#0F0F0F; --sf:#141414; --sf2:#131313; --sf3:#1A1A1A;
@@ -24,7 +24,7 @@
   --am10:rgba(255,158,0,0.10); --am25:rgba(255,158,0,0.25);
   --gn10:rgba(135,215,135,0.10); --gn25:rgba(135,215,135,0.25);
   --sel:rgba(255,158,0,0.07);
-  --kr:#FF9E00; --kn:#6A6A6A; --kd:#87D787; --kp:#FFD700;
+  --kr:#FF9E00; --kn:#6A6A6A; --kd:#87D787; --kp:#FFD700; --kq:#6AA3E0; --km:#B08CF0; --ki:#6AD0D0;
 }
 /* ── Reset ───────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
@@ -245,7 +245,8 @@ function esc(s) {
 }
 function api(path) { return fetch(path).then(r => r.json()); }
 function kindColor(k) {
-  return { research:'var(--kr)', note:'var(--kn)', decision:'var(--kd)', pattern:'var(--kp)' }[k] ?? 'var(--mt)';
+  return { research:'var(--kr)', note:'var(--kn)', decision:'var(--kd)', pattern:'var(--kp)',
+    question:'var(--kq)', memo:'var(--km)', intention:'var(--ki)' }[k] ?? 'var(--mt)';
 }
 
 // ── Markdown renderer ────────────────────────────────────
@@ -585,6 +586,7 @@ function EntryDetail({ entryId, onWikiClick, onBacklinkClick, allEntries }) {
     <div class="det-inner">
       <div class="det-meta">
         <span class="kind-pill" style=${{ background: kindColor(data.kind) + '22', color: kindColor(data.kind) }}>${data.kind}</span>
+        ${data.status && data.status !== 'active' && html`<span class="kind-pill" style=${{ background:'var(--er)22', color:'var(--er)' }}>${data.status}</span>`}
         ${data.project && html`<span class="det-proj">@${data.project}</span>`}
         <span class="det-date">${(data.created_at || '').slice(0,10)}</span>
       </div>

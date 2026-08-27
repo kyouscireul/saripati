@@ -77,12 +77,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_entries USING vec0(
 CREATE VIRTUAL TABLE IF NOT EXISTS fts_entries USING fts5(
   title, body, tags
 );
-
-CREATE TABLE IF NOT EXISTS md_sync (
-  entry_id   INTEGER PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
-  md_hash    TEXT    NOT NULL,     -- hash of the last-synced content: the 3-way merge base
-  synced_at  TEXT    NOT NULL DEFAULT (datetime('now'))
-);
 `;
 
 /** Embedding dimensionality produced by the bundled all-MiniLM-L6-v2 model. */

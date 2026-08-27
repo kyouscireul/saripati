@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -20,9 +20,10 @@ import {
   type EntryKind,
   type EntryRow,
 } from "../db/queries.js";
-import { buildLinkContext, deriveLinks } from "../sync/md.js";
+import { buildLinkContext, deriveLinks } from "../graph/links.js";
 import { embed } from "../embed/embedder.js";
 import { hybridSearch } from "../search/hybrid.js";
+import { readLastFetch } from "../trace.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const _require = createRequire(import.meta.url);
@@ -31,24 +32,35 @@ function readUi(name: string): string {
   return readFileSync(join(__dir, name), "utf8");
 }
 
-function resolveVendor(pkg: string): string {
-  return _require.resolve(pkg);
-}
-
-// Vendor ESM files for the browser dashboard.
-// Each package's CJS entry and browser-ESM entry share the same directory —
-// only the filename suffix differs (.js → .module.js). Path-separator-safe.
+// Vendor ESM files for the browser dashboard. Production serves the copies the
+// build vendored into dist/vendor/ (so preact/htm need not be runtime deps). In
+// dev (tsx, no build) dist/vendor is absent, so fall back to resolving the ESM
+// entry from node_modules — each package's CJS and ESM entries share a directory
+// and differ only by the .js → .module.js suffix.
 function moduleFrom(cjsPath: string): string {
   return cjsPath.replace(/\.js$/, ".module.js");
 }
 
+function vendorPath(bundled: string, pkg: string): string {
+  const local = join(__dir, "..", "vendor", bundled);
+  return existsSync(local) ? local : moduleFrom(_require.resolve(pkg));
+}
+
 const VENDOR: Record<string, string> = {
-  "/vendor/preact.js": moduleFrom(resolveVendor("preact")),
-  "/vendor/hooks.js": moduleFrom(resolveVendor("preact/hooks")),
-  "/vendor/htm.js": moduleFrom(resolveVendor("htm")),
+  "/vendor/preact.js": vendorPath("preact.module.js", "preact"),
+  "/vendor/hooks.js": vendorPath("hooks.module.js", "preact/hooks"),
+  "/vendor/htm.js": vendorPath("htm.module.js", "htm"),
 };
 
-const KINDS: EntryKind[] = ["research", "note", "decision", "pattern"];
+const KINDS: EntryKind[] = [
+  "research",
+  "note",
+  "decision",
+  "pattern",
+  "question",
+  "memo",
+  "intention",
+];
 
 function json(res: ServerResponse, status: number, data: unknown): void {
   const body = JSON.stringify(data);
@@ -141,6 +153,7 @@ async function handle(
   res: ServerResponse,
   writeMode: boolean,
   semanticMode: boolean,
+  dataDir: string,
 ): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
   const p = url.pathname;
@@ -158,6 +171,8 @@ async function handle(
     }
 
     if (p === "/api/config") return json(res, 200, { writeMode, semanticMode });
+
+    if (p === "/api/last-fetch") return json(res, 200, readLastFetch(dataDir));
 
     if (p === "/api/status")
       return json(res, 200, { ...corpusStatus(db), timeline: timeline(db), sessions_recent: latestSessions(db, 5) });
@@ -256,20 +271,24 @@ export async function runUi(argv: string[] = []): Promise<void> {
   const portIdx = argv.indexOf("--port");
   const port = portIdx !== -1 ? Number(argv[portIdx + 1]) || 4319 : 4319;
   const noOpen = argv.includes("--no-open");
-  const writeMode = !argv.includes("--no-write"); // on by default; pass --no-write to disable
+  const writeMode = argv.includes("--write"); // read-only by default; pass --write to enable edits
   const semanticMode = !argv.includes("--no-semantic"); // on by default; pass --no-semantic to disable
 
   const paths = resolvePaths(argv);
   const db = openDb(paths);
 
   const server = createServer((req, res) => {
-    handle(db, req, res, writeMode, semanticMode).catch((err) => json(res, 500, { error: String(err) }));
+    handle(db, req, res, writeMode, semanticMode, paths.dataDir).catch((err) => json(res, 500, { error: String(err) }));
   });
   await new Promise<void>((resolve) => server.listen(port, resolve));
 
   const u = `http://localhost:${port}`;
-  const flags = [writeMode && "--write", semanticMode && "--semantic"].filter(Boolean).join(" ");
-  process.stdout.write("\nSARIPATI dashboard → " + u + "\n  vault: " + paths.dbPath + (flags ? "\n  flags: " + flags : "") + "\n  (Ctrl+C to stop)\n");
+  const mode = writeMode ? "read-write (--write)" : "read-only (pass --write to edit)";
+  const flags = [semanticMode && "--semantic"].filter(Boolean).join(" ");
+  process.stdout.write(
+    "\nSARIPATI dashboard → " + u + "\n  vault: " + paths.dbPath + "\n  mode: " + mode +
+      (flags ? "\n  flags: " + flags : "") + "\n  (Ctrl+C to stop)\n",
+  );
   if (!noOpen) openBrowser(u);
 
   const shutdown = () => { server.close(); db.close(); process.exit(0); };

@@ -20,14 +20,15 @@ is a single SQLite file on your own machine.
   topic — the corpus grows every time the agent runs, not only when you take notes.
 - **Semantic recall, local.** Bundled embeddings (all-MiniLM-L6-v2) power hybrid
   semantic + keyword search entirely on-device.
-- **Knows who it serves.** An optional identity + AI-companion persona (`saripati onboard`)
-  loads at session start, so any host can adopt the right voice and address you correctly.
-- **Obsidian-compatible.** Mirror the whole vault to a human-editable Markdown folder —
-  wikilinks, backlinks, an index — then edit in Obsidian and reconcile changes *back* in.
+- **A steerer, not just a store.** The agent gets *signal*, not just recall: proactive
+  **nudges** at session start (open questions, live intentions, unread memos, stale
+  projects), per-kind priority, and **conflict detection** — every save is checked against
+  the corpus so contradictions surface instead of piling up as equal "truth."
+- **Knows who it serves.** An optional identity + AI-companion persona loads at session
+  start, so any host can adopt the right voice and address you correctly.
 - **Visible.** A launch-on-demand dashboard makes the growing knowledge base browsable,
-  searchable, and exportable.
-- **Zero lock-in.** Local SQLite, MIT-licensed, no cloud account, no vendor, zero runtime
-  dependencies beyond the embedding + storage engines.
+  searchable, and (opt-in) editable.
+- **Zero lock-in.** Local SQLite, MIT-licensed, no cloud account, no vendor.
 
 ## Non-goals
 
@@ -39,15 +40,14 @@ is a single SQLite file on your own machine.
 
 ## Install
 
-### 1. `npx` (recommended)
-
 ```bash
-npx saripati init          # create the vault, print the config, detect your host
-npx saripati init --write  # also register SARIPATI with detected hosts
-npx saripati onboard       # (optional) set up your identity + companion persona
+npx saripati setup                 # create the vault, print the config, detect your host
+npx saripati setup ./setup.md      # also load your identity from a template file
+npx saripati setup ./setup.md --write   # also register SARIPATI with detected hosts
 ```
 
-Then your host connects by **package name** — no folder path, nothing to break:
+Grab [`setup.md`](./setup.md) from this repo, fill in the four identity fields at the top,
+and point `setup` at it. Then your host connects by **package name** — no folder path:
 
 ```json
 {
@@ -57,93 +57,81 @@ Then your host connects by **package name** — no folder path, nothing to break
 }
 ```
 
-Restart your AI host. The first `recall`/`save` downloads the ~90 MB embedding model once,
-then works offline forever.
-
-### 2. Single binary (no Node required)
-
-Download `saripati` for your platform from the
-[Releases](https://github.com/kyou/saripati/releases) page and point your host config at it.
+Restart your AI host. The first `vault` call downloads the ~90 MB embedding model once
+(with a progress heartbeat), then works offline forever.
 
 ---
 
-## The tools (12)
+## The tools (9)
 
-| Tool | What it does |
-|------|--------------|
-| `save_research` | Store a structured finding: topic, findings, sources, confidence, tags. |
-| `remember` | Capture a note, decision, or reusable pattern. |
-| `recall` | Hybrid semantic + keyword search over everything accumulated. |
-| `corpus_status` | What the vault holds: counts, top topics, freshness. |
-| `session_boot` | Load continuity — **identity**, last session, recent entries, active projects. |
-| `session_save` | Write a session digest with next steps. |
-| `project_upsert` / `project_list` | A lightweight project registry (metadata merges). |
+| Tool | What it does — and when to call it |
+|------|------------------------------------|
+| `on` | **Start of every session, unprompted.** Loads identity, last session, recent entries, active projects, and `nudges`. |
+| `off` | **Session end.** Write the digest + next steps yourself. |
+| `vault` | **The one door to knowledge.** Pass `query` to recall; pass `content`/`findings` to save. Every save runs a conflict check. |
+| `entry_update` | Resolve a flagged conflict: supersede, relink, lower confidence, resolve a question, close an intention. |
+| `corpus` | A map of what already exists — counts, top tags, per-project last activity. |
+| `project_update` / `project_list` | A lightweight project registry (metadata merges). |
 | `whoami` | Return the vault owner's identity + companion persona. |
-| `identity_set` | Create/update identity conversationally (fields merge). |
-| `export_md` / `import_md` | Project the vault to Markdown and reconcile edits back. |
+| `identity_set` | Create/update identity + tuning (`companion_config`) — fields merge. |
 
-A typical flow: the AI does web research with its own tools → calls `save_research` →
-next week you (or the AI) `recall` it → open the dashboard to review and export.
+A typical flow: `on` at session start → the AI researches with its own tools → `vault` save
+→ (conflict? `entry_update`) → next week `vault` recall → `off` at the end.
+
+---
+
+## The Steerer model
+
+Entries carry a **kind** and a **lifecycle**, so recall returns signal, not noise.
+
+- **Kinds:** `research` · `note` · `decision` · `pattern` · `question` · `memo` · `intention`.
+  Questions track `resolved`; intentions track `active`; memos are the agent's notes to its
+  future self and surface first at `on`.
+- **Status:** `active` · `superseded` · `archived`. Superseded/archived entries drop out of
+  default recall (pass `include_superseded` to see them) — old decisions stop being cited as
+  current truth.
+- **Priority:** a per-kind boost (memo > question > decision/intention > pattern > research/
+  note), tunable per vault via `identity_set({ companion_config: { recall_boost: … } })`.
+- **Conflict detection:** after every save, `vault` runs a narrow similarity check and
+  returns near-duplicate or contradicting entries so the agent can `entry_update` them.
 
 ---
 
 ## Identity — who the vault serves
 
-```bash
-npx saripati onboard          # interactive setup (also: --print, --reset)
-```
+`setup` reads a small YAML frontmatter from `setup.md`:
 
-A friendly, five-step setup captures your name, field, working preferences, and an optional
-AI-companion persona (pick a starter — *librarian*, *research-assistant*, *plain* — and
-customize). It is stored in a singleton `identity` row. From then on, `session_boot` and the
-`whoami` tool hand your host that context at the start of a session, so it addresses you
-correctly and adopts the right voice. Onboarding is scriptable (`printf ... | saripati
-onboard`) as well as interactive.
-
+```yaml
 ---
-
-## Markdown mirror — edit in Obsidian, reconcile back
-
-SARIPATI projects the vault to an Obsidian-compatible folder and pulls hand edits back in —
-the `.db` stays the single source of truth; the folder is a synced projection.
-
-```bash
-npx saripati export --md      # DB → profile/ (IDENTITY.md, MEMORY.md, memory/*.md)
-npx saripati import --md      # profile/ → DB (re-embeds changed entries)
-npx saripati sync             # export then import in one pass
+name:      Your Name
+field:     Software Engineering
+skills:    [supabase, next.js, laravel]
+language:  English
+companion: librarian     # plain | librarian | research-assistant
+---
 ```
 
-- **`profile/memory/{kind}_{slug}-{id}.md`** — one file per entry: YAML frontmatter, body,
-  sources, `[[wikilinks]]`, and a backlinks section. `MEMORY.md` is the index; `IDENTITY.md`
-  mirrors your persona.
-- **Bidirectional & safe.** An unedited round-trip is a no-op (nothing re-embeds). A body
-  edit re-embeds and re-indexes that entry atomically. When *both* the DB and a file change
-  since the last sync, `import` reports a **conflict** and leaves the DB untouched —
-  `--force-md` lets Markdown win. `--prune` deletes vault entries whose files were removed.
-- Hand-create a note (no `id`) in Obsidian → `import` inserts it and back-fills a canonical
-  filename + id.
+It is stored in a singleton `identity` row. From then on `on` and `whoami` hand your host
+that context at session start, so it adopts the right voice and addresses you correctly.
+Set a focus with `identity_set({ user_prefs: { focus: "project-name" } })` and `on` biases
+recent entries toward it.
 
 ---
 
 ## The dashboard
 
 ```bash
-npx saripati ui                  # opens http://localhost:4319 (write + semantic on by default)
-npx saripati ui --no-write       # disable in-browser editing
+npx saripati ui                  # http://localhost:4319 — read-only by default
+npx saripati ui --write          # enable in-browser tag/kind edits
 npx saripati ui --no-semantic    # FTS only — faster cold start, no model load
 npx saripati ui --port 8080      # custom port
 ```
 
-A local browser UI built on **Preact 10 + HTM** (no CDN, no bundler — vendor files served at `/vendor/*.js`). Four tabs, two themes (light default · dark via header pill):
-
-| Tab | What it shows |
-|-----|--------------|
-| **Entries** | Semantic+keyword search · kind chips · `@project` filter · tag filter · persistent corpus stats footer · entry detail (markdown body, sources, backlinks) + sessions panel on the right |
-| **Graph** | Continuous physics force-graph with thermal drift — drag to rearrange (stays on graph), click to open entry |
-| **Tags** | All tags ranked by frequency · click to filter Entries tab |
-| **Identity** | Profile card · companion persona · latest session · session history (up to 5) |
-
-Write mode and semantic search are **on by default**. Use `--no-write` / `--no-semantic` to disable.
+A local browser UI built on **Preact 10 + HTM** (no CDN, no bundler — vendored ESM served at
+`/vendor/*.js`). Tabs: **Entries** (hybrid search · kind chips · `@project`/tag filters ·
+entry detail with sources + backlinks), **Graph** (physics force-graph over derived links),
+**Tags**, **Identity** (profile · companion · session history). Editing is **off by
+default** — pass `--write` to enable mutations.
 
 ---
 
@@ -154,25 +142,22 @@ AI host (its own web tools)  ──stdio/MCP──▶  saripati mcp
                                                  │
                     embed (MiniLM 384d) ─────────┤
                     hybrid search (vec ∪ FTS5) ──┤
+                    per-kind boost + status ─────┤
                                                  ▼
                                     ~/.saripati/vault.db  (SQLite)
-                                    ▲            ▲
-                    saripati ui ────┘            └──── saripati export/import --md
-                    (read-only dashboard)             ↕ profile/ (Obsidian-compatible)
+                                    ▲
+                    saripati ui ────┘  (read-only dashboard)
 ```
 
-- **Storage:** SQLite via `better-sqlite3`.
+- **Storage:** SQLite via `better-sqlite3`, versioned with a `PRAGMA user_version` migration
+  runner — existing vaults upgrade in place on open.
 - **Vectors:** `sqlite-vec` (vec0) — embeddings are L2-normalized so KNN ranks like cosine.
-- **Keyword:** SQLite FTS5.
-- **Fusion:** Reciprocal Rank Fusion combines the two rankings.
+- **Keyword:** SQLite FTS5. **Fusion:** Reciprocal Rank Fusion combines the two rankings.
 - **Embeddings:** `@xenova/transformers` running all-MiniLM-L6-v2 in-process.
-- **Markdown mirror:** hand-rolled, zero-dependency export/import with a `md_sync` merge base.
-- **Terminal voice:** a small zero-dep presentation layer (`src/term/theme.ts`) — the framed
-  `◈ SARIPATI` wordmark and status frames — degrades to plain ASCII off-TTY and never touches
-  the JSON-RPC channel (banners go to stderr).
+- **Terminal voice:** a small zero-dep presentation layer (`src/term/theme.ts`) that degrades
+  to plain ASCII off-TTY and never touches the JSON-RPC channel (banners go to stderr).
 
 Data lives in `~/.saripati/` by default (override with `SARIPATI_HOME` or `SARIPATI_DB`).
-The Markdown mirror lives in `~/.saripati/profile/`.
 
 ---
 
@@ -180,7 +165,7 @@ The Markdown mirror lives in `~/.saripati/profile/`.
 
 ```bash
 npm install
-npm run build      # tsc → dist/
+npm run build      # tsc → dist/ (+ vendored UI bundles)
 npm test           # end-to-end smoke test
 npm run dev -- mcp # run from source via tsx
 ```

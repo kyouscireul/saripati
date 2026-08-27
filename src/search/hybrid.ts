@@ -17,6 +17,22 @@ import {
 
 const RRF_K = 60;
 
+/**
+ * Default per-kind recall multipliers — the Steerer's priority signal. A memo
+ * (the agent's note to its future self) outranks an equally-relevant note; open
+ * questions and decisions float above raw research. Overridable per call, and
+ * persisted per vault via identity.companion_config.recall_boost.
+ */
+export const DEFAULT_KIND_BOOST: Record<string, number> = {
+  memo: 2.0,
+  question: 1.5,
+  decision: 1.3,
+  intention: 1.3,
+  pattern: 1.1,
+  research: 1.0,
+  note: 1.0,
+};
+
 export interface HybridResult {
   entry: EntryRow;
   score: number;
@@ -27,6 +43,10 @@ export interface HybridResult {
 export interface HybridOptions {
   limit?: number;
   kind?: EntryKind;
+  /** Include superseded/archived entries (excluded by default). */
+  includeSuperseded?: boolean;
+  /** Per-kind score multipliers, merged over DEFAULT_KIND_BOOST. */
+  boosts?: Record<string, number>;
 }
 
 export function hybridSearch(
@@ -56,19 +76,27 @@ export function hybridSearch(
 
   const ids = [...scores.keys()];
   const entryMap = getEntriesByIds(db, ids);
+  const boosts = { ...DEFAULT_KIND_BOOST, ...(options.boosts ?? {}) };
 
   let results: HybridResult[] = ids
     .map((id) => {
       const entry = entryMap.get(id);
       if (!entry) return null;
+      const base = scores.get(id) ?? 0;
       return {
         entry,
-        score: scores.get(id) ?? 0,
+        score: base * (boosts[entry.kind] ?? 1.0),
         matchedVec: inVec.has(id),
         matchedFts: inFts.has(id),
       } satisfies HybridResult;
     })
     .filter((r): r is HybridResult => r !== null);
+
+  // Superseded + archived entries are old truth — excluded from recall unless
+  // the caller explicitly opts in (e.g. auditing decision history).
+  if (!options.includeSuperseded) {
+    results = results.filter((r) => r.entry.status === "active");
+  }
 
   if (options.kind) {
     results = results.filter((r) => r.entry.kind === options.kind);

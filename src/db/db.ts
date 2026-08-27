@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import { SCHEMA_SQL } from "./schema.js";
+import { runMigrations } from "./migrations.js";
 import { ensureDataDir, resolvePaths, type Paths } from "../config.js";
 
 export type DB = Database.Database;
@@ -24,6 +25,9 @@ export function openDb(paths?: Paths): DB {
   sqliteVec.load(db);
 
   db.exec(SCHEMA_SQL);
+
+  // Bring existing (and fresh) vaults up to the current schema version.
+  runMigrations(db);
   return db;
 }
 

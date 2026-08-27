@@ -2,26 +2,22 @@
 /**
  * SARIPATI — command dispatcher.
  *
- *   saripati init [--db <path>]   Create the vault + write host MCP config.
- *   saripati mcp  [--db <path>]   Run the MCP server over stdio (host connects here).
- *   saripati ui   [--port <n>]    Launch the local dashboard.
+ *   saripati setup [setup.md]     Create the vault + identity, print host MCP config.
+ *   saripati mcp   [--db <path>]  Run the MCP server over stdio (host connects here).
+ *   saripati ui    [--port <n>]   Launch the local dashboard.
  *   saripati help                 Show this help.
  *
  * Subcommands are imported lazily so that `mcp` (the hot path) pays no cost for
- * the UI or init dependencies.
+ * the UI or setup dependencies.
  */
 
 import { banner, caps } from "./term/theme.js";
 
 const USAGE = `Usage:
-  saripati init    [--db <path>]  Create the vault and register it with your AI host
-  saripati onboard                Set up your identity + optional companion persona
-  saripati mcp     [--db <path>]  Start the MCP server (stdio) — hosts connect here
-  saripati ui      [--port <n>]   Open the dashboard to browse and export the corpus
-  saripati export  --md [--out d] Mirror the vault to an Obsidian-friendly folder
-  saripati import  --md [--force-md] [--prune]   Reconcile Markdown edits back in
-  saripati sync    [--force-md] [--prune]        Export then import in one pass
-  saripati help                   Show this help
+  saripati setup   [setup.md] [--write]  Create the vault + identity, print the host config
+  saripati mcp     [--db <path>]         Start the MCP server (stdio) — hosts connect here
+  saripati ui      [--port <n>]          Open the dashboard to browse the corpus
+  saripati help                          Show this help
 
 Environment:
   SARIPATI_HOME   Data directory (default: ~/.saripati)
@@ -37,29 +33,9 @@ async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
 
   switch (command) {
-    case "init": {
-      const { runInit } = await import("./commands/init.js");
-      await runInit(rest);
-      break;
-    }
-    case "onboard": {
-      const { runOnboard } = await import("./commands/onboard.js");
-      await runOnboard(rest);
-      break;
-    }
-    case "export": {
-      const { runExport } = await import("./commands/sync.js");
-      await runExport(rest);
-      break;
-    }
-    case "import": {
-      const { runImport } = await import("./commands/sync.js");
-      await runImport(rest);
-      break;
-    }
-    case "sync": {
-      const { runSync } = await import("./commands/sync.js");
-      await runSync(rest);
+    case "setup": {
+      const { runSetup } = await import("./commands/setup.js");
+      await runSetup(rest);
       break;
     }
     case "mcp": {

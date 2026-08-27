@@ -1,0 +1,53 @@
+---
+# ── Your identity ───────────────────────────────────────────────────────────
+# Fill these in, then run:  npx saripati setup ./setup.md
+# Add --write to also register SARIPATI with your detected AI hosts.
+name:        Your Name
+field:       What you do (e.g. Software Engineering)
+skills:      [thing one, thing two, thing three]
+language:    English
+# Optional AI companion persona. One of: plain | librarian | research-assistant
+companion:   librarian
+---
+
+# SARIPATI — Setup
+
+SARIPATI is a local-first, provider-agnostic MCP knowledge vault. It runs no LLM
+and needs no API keys — it gives whatever AI host you use a persistent, compounding
+memory. The identity above tells the vault who it belongs to.
+
+## 1. Register with your AI host
+
+Add this to your host's MCP config (works for Claude Code, Claude Desktop, Cursor,
+Windsurf, and any MCP-compatible host):
+
+```json
+{
+  "mcpServers": {
+    "saripati": {
+      "command": "npx",
+      "args": ["-y", "saripati", "mcp"]
+    }
+  }
+}
+```
+
+`npx saripati setup ./setup.md --write` will attempt to merge this into every
+detected host automatically (it always prints the snippet first — it never edits
+a config silently).
+
+## 2. Tell your agent the protocol
+
+Paste this into your host's system prompt / rules so the agent uses the vault well:
+
+> You have a SARIPATI knowledge vault. Call `on` at the very start of every session
+> to load continuity and surface nudges (open questions, active intentions, unread
+> memos, stale projects). Before answering anything that may have been researched or
+> decided before, `vault` recall first. The moment a decision is made, a finding is
+> confirmed, or a pattern emerges, `vault` save it — don't wait to be asked. When the
+> vault flags a conflict on save, resolve it with `entry_update` (supersede or link).
+> Call `off` at session end and write the digest yourself.
+
+## 3. Browse it
+
+`npx saripati ui` opens a local dashboard (read-only by default; add `--write` to edit).

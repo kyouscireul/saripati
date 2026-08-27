@@ -24,7 +24,7 @@ C4Context
   Rel(user, host, "Speaks to")
   Rel(host, saripati, "Spawns and calls tools via JSON-RPC over stdio")
   Rel(saripati, vault, "Reads and writes")
-  Rel(dashboard, vault, "Reads + writes tags/kind (PATCH /api/entry/:id)")
+  Rel(dashboard, vault, "Reads (read-only by default; --write enables tag/kind PATCH)")
   Rel(user, dashboard, "Browses at http://localhost:4319")
 ```
 
@@ -41,23 +41,24 @@ graph TD
     subgraph SARIPATI["saripati mcp (child process)"]
         CLI[cli.ts — command dispatcher]
         SRV[mcp/server.ts — McpServer + StdioTransport]
-        subgraph TOOLS["Tool Registrations (12)"]
-            TR[research.ts — save_research]
-            TM[memory.ts — remember / recall]
-            TS[session.ts — session_boot / session_save]
-            TP[project.ts — project_upsert / project_list]
-            TST[status.ts — corpus_status]
+        subgraph TOOLS["Tool Registrations (9)"]
+            TV[vault.ts — vault: save/recall + conflict check]
+            TE[entry.ts — entry_update]
+            TS[session.ts — on / off]
+            TP[project.ts — project_update / project_list]
+            TST[status.ts — corpus]
             TI[identity.ts — whoami / identity_set]
-            TSY[sync.ts — export_md / import_md]
         end
         TERM[term/theme.ts — banner, frames, palette, symbols]
-        SYNC[sync/md.ts — export/import, deriveLinks, frontmatter]
+        GRAPH[graph/links.ts — buildLinkContext, deriveLinks]
+        TRACE[trace.ts — last-fetch retrieval trace]
         PERS[data/personas.ts — starter persona presets]
         EMB[embed/embedder.ts — MiniLM-L6-v2 via @xenova/transformers]
-        SRCH[search/hybrid.ts — Reciprocal Rank Fusion]
+        SRCH[search/hybrid.ts — RRF + per-kind boost + status filter]
         subgraph DB["db/"]
             DBD[db.ts — openDb, WAL, sqlite-vec load]
-            DBQ[queries.ts — insert/update/deleteEntry, identity, md_sync, ...]
+            DBM[migrations.ts — PRAGMA user_version runner]
+            DBQ[queries/*.ts — entries, search, sessions, projects, identity, corpus]
             DBS[schema.ts — SCHEMA_SQL, EMBEDDING_DIM=384]
         end
     end
@@ -68,20 +69,13 @@ graph TD
         T3[(sessions)]
         T4[(projects)]
         T5[(identity — singleton)]
-        T6[(md_sync — merge base)]
         VT[(vec_entries — sqlite-vec vec0)]
         FT[(fts_entries — FTS5)]
     end
 
-    subgraph PROFILE["~/.saripati/profile/ (Obsidian-compatible)"]
-        P1[IDENTITY.md]
-        P2[MEMORY.md]
-        P3[memory/*.md]
-    end
-
     subgraph UI["saripati ui (separate process)"]
-        UIS[ui/server.ts — Node http]
-        UIW[ui/web.html — Preact 10 + HTM, real file, served from disk]
+        UIS[ui/server.ts — Node http, read-only by default]
+        UIW[ui/web.html — Preact 10 + HTM, served from disk]
     end
 
     H -- "JSON-RPC over stdio" --> SRV
@@ -89,36 +83,33 @@ graph TD
     CLI --> TERM
     SRV --> TERM
     SRV --> TOOLS
-    TR --> EMB
-    TM --> EMB
-    TM --> SRCH
-    TSY --> SYNC
-    SYNC --> EMB
-    SYNC --> P1
-    SYNC --> P2
-    SYNC --> P3
+    TV --> EMB
+    TV --> SRCH
+    TV --> TRACE
     TOOLS --> DBQ
     EMB --> DBQ
     SRCH --> DBQ
-    SYNC --> DBQ
     DBQ --> DBD
+    DBD --> DBM
     DBD --> DBS
     DBD --> T1
     DBD --> T2
     DBD --> T3
     DBD --> T4
     DBD --> T5
-    DBD --> T6
     DBD --> VT
     DBD --> FT
     UIS --> DBQ
+    UIS --> GRAPH
+    UIS --> TRACE
     UIS --> UIW
 ```
 
-`term/theme.ts` is the zero-dependency presentation layer used by the CLI (bare invocation,
-`onboard`) and by `mcp/server.ts` (startup banner to **stderr only**). `sync/md.ts` is the
-bidirectional Markdown engine driven by both the `export`/`import`/`sync` CLI commands and
-the `export_md`/`import_md` MCP tools.
+`term/theme.ts` is the zero-dependency presentation layer used by the CLI (`setup`, bare
+invocation) and by `mcp/server.ts` (startup banner to **stderr only**). `graph/links.ts`
+holds the canonical link-derivation rule that powers the dashboard's `/api/graph` and
+`/api/backlinks` endpoints. `trace.ts` is the cross-process retrieval trace: `vault` recall
+writes the last fetch to a small JSON in the data dir, which the UI reads at `/api/last-fetch`.
 
 ---
 
@@ -126,34 +117,33 @@ the `export_md`/`import_md` MCP tools.
 
 | Module | File | Responsibility |
 |--------|------|----------------|
-| CLI dispatcher | `src/cli.ts` | Parses `process.argv`, lazy-imports the right subcommand; bare invocation + `help` print the banner |
-| Path resolution | `src/config.ts` | Resolves `dataDir`, `dbPath`, `modelCacheDir`, `profileDir`, `memoryDir`; `ensureProfileDir` (on-demand) |
+| CLI dispatcher | `src/cli.ts` | Parses `process.argv`, lazy-imports the right subcommand (`setup`/`mcp`/`ui`); bare invocation + `help` print the banner |
+| Path resolution | `src/config.ts` | Resolves `dataDir`, `dbPath`, `modelCacheDir`; `ensureDataDir` |
 | Presentation | `src/term/theme.ts` | Zero-dep terminal voice: `caps()`, palette, `◈` symbols, `banner`, `frame`, `steps`, `report`; single `VERSION` from package.json |
-| Database open | `src/db/db.ts` | Opens SQLite, sets WAL + FK pragmas, loads sqlite-vec extension, applies schema |
-| Schema | `src/db/schema.ts` | Embedded `SCHEMA_SQL` string (incl. `identity`, `md_sync`); defines `EMBEDDING_DIM = 384` |
-| Queries | `src/db/queries.ts` | All SQL: insert/**update**/**delete**Entry (atomic tri-table tx), vec/ftsSearch, upsertProject, **identity**, **md_sync**, `allEntries` |
+| Database open | `src/db/db.ts` | Opens SQLite, sets WAL + FK pragmas, loads sqlite-vec, applies `SCHEMA_SQL`, then runs migrations |
+| Migrations | `src/db/migrations.ts` | `PRAGMA user_version` runner; migration 2 rebuilds `entries` to widen `kind` + add lifecycle columns |
+| Schema | `src/db/schema.ts` | Embedded baseline `SCHEMA_SQL` string; defines `EMBEDDING_DIM = 384` |
+| Queries | `src/db/queries/*.ts` | Domain modules (entries, search, sessions, projects, identity, corpus) re-exported by `queries.ts`; atomic tri-table tx; nudge helpers (`unresolvedQuestions`, `activeIntentions`, `unreadMemos`, `lastEntryAtByProject`) |
+| Link graph | `src/graph/links.ts` | `buildLinkContext`, `deriveLinks` (canonical edge rule) — powers the UI graph |
+| Retrieval trace | `src/trace.ts` | `writeLastFetch` / `readLastFetch` — cross-process record of the last recall |
 | Embedder | `src/embed/embedder.ts` | Singleton pipeline: `Xenova/all-MiniLM-L6-v2`, mean-pool + L2-normalize → 384-dim float[] |
-| Hybrid search | `src/search/hybrid.ts` | RRF fusion of vec KNN + FTS5 BM25, `RRF_K = 60` |
-| Markdown sync | `src/sync/md.ts` | Bidirectional engine: `exportVault`, `importVault` (3-way reconcile), `deriveLinks` (canonical rule), frontmatter parse/serialize, `contentHash` |
+| Hybrid search | `src/search/hybrid.ts` | RRF fusion of vec KNN + FTS5 BM25 (`RRF_K = 60`), per-kind boost, superseded/archived exclusion |
 | Personas | `src/data/personas.ts` | Starter persona presets (librarian / research-assistant / plain) — pure data |
-| Init | `src/commands/init.ts` | `saripati init` — create the vault, detect host config files, print the MCP snippet; `--write` merges config into detected hosts (backs up first); `--host` targets a single host; `--dev` emits a local node path instead of `npx saripati` |
-| Onboarding | `src/commands/onboard.ts` | `saripati onboard` — 5-step readline flow (TTY or piped), `--print` / `--reset` |
-| Sync commands | `src/commands/sync.ts` | `runExport` / `runImport` / `runSync` — `--md`, `--out`, `--force-md`, `--prune`; themed reports |
-| MCP server | `src/mcp/server.ts` | Prints banner to stderr, warms model before transport connects, registers all 12 tools, stdio transport, SIGINT/SIGTERM shutdown |
-| Tool: research | `src/mcp/tools/research.ts` | `save_research` — embeds, inserts entry + sources |
-| Tool: memory | `src/mcp/tools/memory.ts` | `remember` (embed + insert), `recall` (embed + hybridSearch) |
-| Tool: session | `src/mcp/tools/session.ts` | `session_boot` (identity + last session + recent entries + active projects), `session_save` |
-| Tool: project | `src/mcp/tools/project.ts` | `project_upsert` (JSON-patch merge on conflict), `project_list` |
-| Tool: status | `src/mcp/tools/status.ts` | `corpus_status` — aggregates counts, byKind, topTags (json_each), lastUpdated |
+| Setup | `src/commands/setup.ts` | `saripati setup [setup.md]` — create the vault, parse identity frontmatter, print the MCP snippet; `--write` merges config into detected hosts; `--host`, `--from`, `--dev` |
+| MCP server | `src/mcp/server.ts` | Banner to stderr, warms model (with heartbeat) before transport connects, registers all 9 tools, stdio transport, SIGINT/SIGTERM shutdown |
+| Tool: vault | `src/mcp/tools/vault.ts` | `vault` — routes save vs recall; save runs a post-save conflict check; recall applies boosts + writes the trace |
+| Tool: entry | `src/mcp/tools/entry.ts` | `entry_update` — metadata-only mutation (status, superseded_by, links, resolved, active, tags, kind) |
+| Tool: session | `src/mcp/tools/session.ts` | `on` (identity + last session + recent + projects + nudges + focus bias), `off` |
+| Tool: project | `src/mcp/tools/project.ts` | `project_update` (JSON-patch merge), `project_list` |
+| Tool: status | `src/mcp/tools/status.ts` | `corpus` — counts, byKind, topTags, per-project `last_entry_at` |
 | Tool: identity | `src/mcp/tools/identity.ts` | `whoami` (getIdentity), `identity_set` (upsertIdentity, fields merge) |
-| Tool: sync | `src/mcp/tools/sync.ts` | `export_md` (exportVault), `import_md` (importVault) — needs `paths` |
 | Result helpers | `src/mcp/tools/_result.ts` | `jsonResult`, `textResult`, `deriveTitle`, `excerpt` |
-| UI server | `src/ui/server.ts` | Node `http.createServer`; reads `web.html` from disk; serves `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js` (resolved via CJS path + `.module.js` suffix); 10 JSON API endpoints; `--write` and `--semantic` are **on by default** (`--no-write` / `--no-semantic` to disable); PATCH `/api/entry/:id` always live; `/api/entries?project=` for project filtering |
+| UI server | `src/ui/server.ts` | Node `http.createServer`; serves vendored ESM from `dist/vendor/` (dev falls back to node_modules); JSON API incl. `/api/last-fetch`; **read-only by default** — `--write` enables PATCH `/api/entry/:id` |
 | UI HTML | `src/ui/web.html` | Real HTML file — **Preact 10 + HTM** loaded via ESM at `/vendor/*.js`; `<script type="importmap">` resolves bare `"preact"` specifier for `hooks.module.js`; 2 themes (light default / dark, CSS vars, `localStorage`); 4 tabs (Entries · Graph · Tags · Identity); continuous-physics canvas force-graph with thermal noise; regex markdown renderer; SessionsPanel (last 5 sessions) beside entry detail; mini corpus stat footer in sidebar; `@project` click-to-filter. Built by `scripts/copy-ui.mjs`. |
 
 ---
 
-## Data Flow: Write Path (`save_research` / `remember`)
+## Data Flow: Write Path (`vault` save)
 
 ```mermaid
 sequenceDiagram
@@ -162,17 +152,17 @@ sequenceDiagram
     participant Emb as embedder.ts
     participant DB as queries.ts (SQLite tx)
 
-    Host->>MCP: tools/call save_research {topic, findings, sources, tags, project}
-    MCP->>Emb: embed(topic + findings joined)
+    Host->>MCP: tools/call vault {findings|content, kind, tags, project}
+    MCP->>Emb: embed(title + body)
     Emb-->>MCP: float[384] (L2-normalized)
     MCP->>DB: insertEntry() — BEGIN TRANSACTION
     DB->>DB: INSERT INTO entries (kind, title, body, ...)
     DB->>DB: INSERT INTO vec_entries (rowid=id, embedding=blob)
     DB->>DB: INSERT INTO fts_entries (rowid=id, title, body, tags)
     DB-->>MCP: entry id
-    MCP->>DB: insertSource() × N (for each source)
-    DB-->>MCP: source ids
-    MCP-->>Host: {content: [{type:"text", text:"Saved research #N ..."}]}
+    MCP->>DB: insertSource() × N (research sources)
+    MCP->>DB: detectConflicts() — narrow vec check vs the new entry
+    MCP-->>Host: {saved:{id,title,kind}, conflicts?:[...]}
 ```
 
 **Key invariant:** `insertEntry` is a single `db.transaction()` — `entries`, `vec_entries`,
@@ -180,7 +170,7 @@ and `fts_entries` rows are always inserted atomically. If any step fails, all th
 
 ---
 
-## Data Flow: Read Path (`recall`)
+## Data Flow: Read Path (`vault` recall)
 
 ```mermaid
 sequenceDiagram
@@ -190,15 +180,16 @@ sequenceDiagram
     participant Srch as hybrid.ts
     participant DB as queries.ts
 
-    Host->>MCP: tools/call recall {query, limit?, kind?}
+    Host->>MCP: tools/call vault {query, limit?, kind?, include_superseded?}
     MCP->>Emb: embed(query)
     Emb-->>MCP: float[384]
-    MCP->>Srch: hybridSearch(db, embedding, queryText, {limit, kind})
+    MCP->>Srch: hybridSearch(db, embedding, queryText, {limit, kind, boosts, includeSuperseded})
     Srch->>DB: vecSearch(embedding, candidateCount) → VecHit[]
     Srch->>DB: ftsSearch(queryText, candidateCount) → FtsHit[]
-    Srch->>Srch: RRF fusion: score[id] += 1 / (60 + rank + 1)
+    Srch->>Srch: RRF fusion × per-kind boost; drop superseded/archived
     Srch->>DB: getEntriesByIds(merged id set)
     Srch-->>MCP: HybridResult[] sorted by score desc
+    MCP->>MCP: writeLastFetch() — retrieval trace for the UI
     MCP-->>Host: {content: [{type:"text", text:"Recalled N entries..."}]}
 ```
 
@@ -255,30 +246,26 @@ score(id) = Σ  1 / (RRF_K + rank_i + 1)
   pure JSON-RPC. This is the same discipline the embedder warmup already follows.
 - **Single version source.** `VERSION` is read once from `package.json` via `import.meta.url`
   (falling back to `0.0.0`), and feeds both the banner and the MCP `serverInfo.version`.
-- **Shared helpers.** `frame` (titled rounded box), `steps` (`[n/N]` onboarding progress), and
-  `report` (semantic-toned count table) are consumed by `onboard` and the sync commands, so
-  every surface reads as one product.
+- **Shared helpers.** `frame` (titled rounded box), `steps` (`[n/N]` progress), and `report`
+  (semantic-toned count table) are consumed by `setup` and the MCP banner, so every surface
+  reads as one product.
 
-## Markdown Sync (bidirectional)
+## Steerer Layer (kinds, status, boost, conflicts)
 
-`src/sync/md.ts` projects the vault to `~/.saripati/profile/` and reconciles hand edits back.
-The `.db` remains the single source of truth; the folder is a synced projection.
+v0.3.0 turns the store into a *steerer* — recall returns signal, not just matches.
 
-- **Merge base.** `contentHash(entry)` is a 16-hex SHA-256 over normalized content (CRLF→LF,
-  trimmed, tags sorted) — computed *identically* in both directions and stored in `md_sync`.
-  So an unedited export→import is a **stable no-op**, never a spurious re-embed.
-- **File shape.** `memory/{kind}_{slug}-{id}.md` = YAML frontmatter (incl. the join key `id`)
-  + `# title` + body + a `GEN_MARKER`, below which sources/links/backlinks are auto-derived
-  and **stripped on import** (generated content never re-enters the stored body).
-- **Canonical links.** `deriveLinks` is the single rule for edges — explicit `[[..]]`
-  resolved by basename then title-slug, plus implicit shared-project and shared-tag edges
-  (capped, strongest type wins). The same rule will feed the Phase-3 graph, so MD and graph
-  can never disagree. Backlinks invert *explicit* wikilinks only.
-- **3-way reconcile.** `importVault` compares DB hash, file hash, and the stored base: only-MD
-  changed → `updateEntry` (re-embedding via `sync/md.ts`, the caller); only-DB → skip; both →
-  **conflict** (reported, DB untouched) unless `--force-md`. Hand-created files (no `id`) are
-  inserted and back-filled to a canonical name; orphaned entries are reported, and deleted
-  only under `--prune`.
+- **Link graph.** `src/graph/links.ts` (`deriveLinks`) is the single rule for edges — explicit
+  `[[..]]` resolved by basename then title-slug, plus implicit shared-project and shared-tag
+  edges (capped, strongest type wins). It powers the dashboard's `/api/graph` + `/api/backlinks`.
+- **Per-kind boost + status filter.** `hybridSearch` multiplies each fused score by a per-kind
+  factor (memo > question > decision/intention > pattern > research/note, tunable via
+  `companion_config.recall_boost`) and drops `superseded`/`archived` entries unless
+  `include_superseded` is set.
+- **Conflict detection.** After every `vault` save, a narrow vec similarity check (cosine ≥
+  `companion_config.conflict_threshold`, default 0.85) returns near-duplicate/contradicting
+  entries, which the agent resolves with `entry_update` (supersede / link / lower confidence).
+- **Nudges.** `on` surfaces unresolved questions, active intentions, unread memos (created
+  since the last session), and stale projects (no entries in > `stale_days`, default 21).
 
 ## SQLite Configuration
 
@@ -304,7 +291,7 @@ Host            saripati mcp process
  │◀── result ───────────│  (serverInfo: {name:"saripati", version: <package.json>})
  │                      │
  │── tools/list ────────▶│
- │◀── result ───────────│  (12 tool descriptors with inputSchema)
+ │◀── result ───────────│  (9 tool descriptors with inputSchema)
  │                      │
  │── tools/call ────────▶│  (name, arguments)
  │◀── result ───────────│  (content: [{type:"text", text:"..."}])
@@ -320,10 +307,13 @@ the vault path — goes to stderr, rendered with `caps(process.stderr)`.
 | Tier | Install | Notes |
 |------|---------|-------|
 | 1 — npm | `npx -y saripati mcp` | Primary path. `npx` fetches on first use, caches locally. |
-| 2 — init auto-config | `npx -y saripati init --write` | Writes `mcpServers.saripati` into detected host configs, backs up existing file. |
-| 3 — binary | GitHub Release assets | `bun --compile` single-file binaries. Native addon bundling (better-sqlite3, onnxruntime-node) is **unverified**. Treat as best-effort. |
+| 2 — setup auto-config | `npx -y saripati setup --write` | Writes `mcpServers.saripati` into detected host configs, backs up existing file. |
 
-Host detection in `init` scans for: `~/.claude.json` (Claude Code), `~/.cursor/mcp.json`
+> Single-file `bun --compile` binaries were removed in v0.3.0: the native addons
+> (better-sqlite3, sqlite-vec, onnxruntime-node) cannot be bundled cleanly, so the feature
+> was never real. npm is the supported distribution path.
+
+Host detection in `setup` scans for: `~/.claude.json` (Claude Code), `~/.cursor/mcp.json`
 (Cursor), `~/.codeium/windsurf/mcp_config.json` (Windsurf),
 `%APPDATA%/Claude/claude_desktop_config.json` (Claude Desktop).
 
@@ -343,11 +333,9 @@ graph LR
 
     subgraph REL["Release (push tag v*)"]
         R1[npm-publish job] --> R2[npm publish --access public]
-        R3[binaries matrix] --> R4[bun build --compile × 3 OS]
-        R4 --> R5[GitHub Release assets]
     end
 ```
 
 Release triggers on any tag matching `v*`. The npm publish job uses `NODE_AUTH_TOKEN` from
-repository secrets. The binaries job has `fail-fast: false` — a binary build failure does
-not block the npm publish.
+repository secrets. (In practice, publishing is done manually with a fresh OTP, since the npm
+account uses TOTP 2FA.)

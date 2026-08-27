@@ -1,11 +1,14 @@
 # SARIPATI — Entity Relationship Diagram
 
 All state lives in a single SQLite file (`~/.saripati/vault.db` by default).
-There are six regular tables, two virtual tables (one per index), and one
-embedded string constant that defines the entire schema.
+There are five regular tables, two virtual tables (one per index), an embedded
+string constant (`SCHEMA_SQL`) that defines the baseline schema, and a versioned
+migration runner (`PRAGMA user_version`) that upgrades existing vaults on open.
 
-> **v0.2.0** added two tables — `identity` (a singleton profile + companion
-> persona) and `md_sync` (the merge base for bidirectional Markdown sync).
+> **v0.3.0** widened `entries.kind` to seven kinds and added lifecycle columns
+> (`status`, `superseded_by`, `links`, `resolved`, `active`). The Markdown-sync
+> `md_sync` table was retired. Existing vaults upgrade in place via migration 2
+> (a safe table rebuild — SQLite cannot alter a CHECK constraint otherwise).
 
 ---
 
@@ -15,12 +18,17 @@ embedded string constant that defines the entire schema.
 erDiagram
     entries {
         INTEGER id PK "AUTOINCREMENT"
-        TEXT    kind   "CHECK: research|note|decision|pattern"
+        TEXT    kind   "CHECK: research|note|decision|pattern|question|memo|intention"
         TEXT    title  "NOT NULL"
         TEXT    body   "NOT NULL"
-        REAL    confidence "nullable — 0.0 to 1.0"
+        REAL    confidence "nullable — 0.0 to 1.0, or NULL = explicitly unknown"
         TEXT    tags   "JSON array TEXT, DEFAULT '[]'"
         TEXT    project "nullable FK-by-name to projects.name"
+        TEXT    status "CHECK: active|superseded|archived, DEFAULT active"
+        INTEGER superseded_by "nullable — id of the replacing entry"
+        TEXT    links  "JSON array TEXT of {id,rel}, DEFAULT '[]'"
+        INTEGER resolved "nullable 0/1 — for kind=question"
+        INTEGER active   "nullable 0/1 — for kind=intention"
         TEXT    created_at "datetime('now') UTC"
         TEXT    updated_at "datetime('now') UTC"
     }
@@ -67,12 +75,6 @@ erDiagram
         TEXT    updated_at "datetime('now') UTC"
     }
 
-    md_sync {
-        INTEGER entry_id PK "REFERENCES entries(id) ON DELETE CASCADE"
-        TEXT    md_hash   "16-hex content hash — the 3-way merge base"
-        TEXT    synced_at "datetime('now') UTC"
-    }
-
     vec_entries {
         INTEGER rowid     "== entries.id"
         BLOB    embedding "float[384] little-endian float32, L2-normalized"
@@ -88,7 +90,6 @@ erDiagram
     entries ||--o{ sources     : "has"
     entries ||--|| vec_entries : "has embedding (rowid sync)"
     entries ||--|| fts_entries : "has FTS index (rowid sync)"
-    entries ||--o| md_sync     : "has merge base (1:1, cascade)"
 ```
 
 ---
@@ -99,23 +100,32 @@ erDiagram
 
 The central knowledge unit. `kind` is a discriminator:
 
-| kind | created by | description |
-|------|-----------|-------------|
-| `research` | `save_research` | Structured finding: topic → findings list → sources |
-| `note` | `remember` | Free-form text captured by the host AI |
-| `decision` | `remember` | An explicit decision recorded for future recall |
-| `pattern` | `remember` | A reusable solution or architectural pattern |
+| kind | description |
+|------|-------------|
+| `research` | Structured finding: topic → findings list → sources (`vault` with `findings`) |
+| `note` | Free-form text captured by the host AI |
+| `decision` | An explicit decision recorded for future recall |
+| `pattern` | A reusable solution or architectural pattern |
+| `question` | An open question; `resolved` tracks whether it's answered. Surfaced by `on`. |
+| `memo` | The agent's note to its future self; surfaced first by `on`. |
+| `intention` | A multi-session commitment; `active` tracks whether it's live. |
 
-`tags` is stored as a JSON TEXT array (`["lazada","affiliate"]`). It is
-parsed in JavaScript by `safeParseArray()` on every read — there is no
-native array type in SQLite. `project` is an un-enforced soft reference to
-`projects.name` (no foreign key constraint); deletion of a project row does
-not cascade to entries.
+All kinds are created through the combined `vault` save tool. **Lifecycle:** `status`
+(`active`/`superseded`/`archived`) governs recall — superseded/archived entries are
+excluded from default results (retrievable with `include_superseded`). `superseded_by`
+points to the replacing entry; `links` holds explicit typed edges (`{id, rel}` where rel ∈
+`because-of·supersedes·related·contradicts`).
+
+`tags` and `links` are stored as JSON TEXT arrays, parsed in JavaScript on every read —
+there is no native array type in SQLite. `project` is an un-enforced soft reference to
+`projects.name` (no foreign key constraint); deletion of a project row does not cascade to
+entries.
 
 Indexes:
 - `entries_kind_idx` on `(kind)` — filter by kind in `listEntries`
 - `entries_project_idx` on `(project)` — filter by project in `listEntries`
 - `entries_created_idx` on `(created_at DESC)` — `recentEntries`, default sort
+- `entries_status_idx` on `(status)` — exclude superseded/archived in recall
 
 ### `sources`
 
@@ -125,18 +135,18 @@ sources automatically. One entry may have zero or many sources.
 
 ### `sessions`
 
-Session digests written by `session_save`. `next_steps` is a JSON TEXT array
-of strings. `session_boot` reads `latestSessions(db, 1)` to return the most
-recent digest. Sessions are append-only; there is no update path.
+Session digests written by `off`. `next_steps` is a JSON TEXT array of strings.
+`on` reads `latestSessions(db, 1)` to return the most recent digest (and uses its
+`created_at` as the "unread memos since" cutoff). Sessions are append-only.
 
 ### `projects`
 
 A lightweight registry of projects, keyed by `name` (UNIQUE). `metadata` is
 a JSON TEXT object that is **merged** on upsert via SQLite's `json_patch()`
-function — this means calling `project_upsert` with a partial metadata object
+function — this means calling `project_update` with a partial metadata object
 adds or updates fields without wiping existing ones. `status` controls
-filtering in `project_list` and in `session_boot` (which returns only
-`active` projects).
+filtering in `project_list` and in `on` (which returns only `active` projects,
+and flags those with no recent entries as `stale_projects`).
 
 ### `identity` (singleton — who the vault serves)
 
@@ -144,22 +154,12 @@ A single row (`CHECK (id = 1)`) holding the vault owner's profile and an optiona
 AI-companion persona. Scalar fields (`user_name`, `user_field`, `companion_name`,
 `companion_role`, `companion_tone`) sit beside two JSON TEXT objects: `user_prefs`
 (skills, communication style, address, language) and `companion_config` (extended
-persona — traits, values, habits). Written by `saripati onboard`, by the
-`identity_set` MCP tool, and by importing `IDENTITY.md`. `upsertIdentity` mirrors
-`upsertProject`: scalar fields replace via `COALESCE` (a partial update preserves
-prior values) while the JSON objects **merge** via `json_patch()`, so the persona
-can be built incrementally. `getIdentity` returns it; `session_boot` embeds it.
-
-### `md_sync` (Markdown merge base)
-
-One row per entry, keyed by `entry_id` with `ON DELETE CASCADE` — so pruning an
-entry drops its sync record automatically. `md_hash` is a 16-hex content hash of
-the entry's *last-synced* state (kind, title, body, tags, project, confidence —
-normalized: CRLF→LF, trimmed, tags sorted). It is the **3-way merge base** for
-bidirectional sync: comparing the current DB hash, the current file hash, and this
-stored base tells `importVault` whether only the DB changed, only the file changed,
-or both (a conflict). Stored inside the `.db` (not a sidecar) so the source of
-truth stays a single portable file.
+persona — traits, values, habits, and vault tuning like `recall_boost`,
+`conflict_threshold`, `stale_days`). Written by `saripati setup` and the
+`identity_set` MCP tool. `upsertIdentity` mirrors `upsertProject`: scalar fields
+replace via `COALESCE` (a partial update preserves prior values) while the JSON
+objects **merge** via `json_patch()`, so the persona can be built incrementally.
+`getIdentity` returns it; `on` embeds it and reads `user_prefs.focus` to bias recall.
 
 ### `vec_entries` (virtual — sqlite-vec vec0)
 
@@ -196,6 +196,7 @@ This avoids FTS5 operator injection.
 | Table | Column | Type | Serialized as |
 |-------|--------|------|---------------|
 | entries | tags | `string[]` | `'["a","b"]'` |
+| entries | links | `{id,rel}[]` | `'[{"id":4,"rel":"supersedes"}]'` |
 | sessions | next_steps | `string[]` | `'["step 1","step 2"]'` |
 | projects | metadata | `Record<string, unknown>` | `'{"key":"val"}'` |
 | identity | user_prefs | `Record<string, unknown>` | `'{"language":"English"}'` |
@@ -229,13 +230,13 @@ strict integer rowid requirement.
 
 ### `updateEntry()` — the same invariant, on the edit path
 
-Introduced in v0.2.0 for Markdown import, `updateEntry()` is the first
-non-append write path. It preserves the tri-table invariant inside one
-`db.transaction()`, touching each index **only when needed**:
+`updateEntry()` preserves the tri-table invariant inside one `db.transaction()`,
+touching each index **only when needed**:
 
 ```
 BEGIN
-  UPDATE entries SET kind/title/body/confidence/tags/project, updated_at=now
+  UPDATE entries SET kind/title/body/confidence/tags/project/status/
+                     superseded_by/links/resolved/active, updated_at=now
   if embedding supplied (title/body changed):   -- caller re-embeds
       DELETE FROM vec_entries WHERE rowid = BigInt(id)
       INSERT INTO vec_entries (rowid, embedding)
@@ -245,25 +246,23 @@ BEGIN
 COMMIT
 ```
 
-A metadata-only edit (e.g. only `project`) rewrites neither index. Re-embedding
-is the caller's job — `queries.ts` stays synchronous and pure; `sync/md.ts`
-computes the new vector and passes it in.
+Lifecycle metadata (`status`, `superseded_by`, `links`, `resolved`, `active`) never
+re-indexes or re-embeds — the `entry_update` tool is metadata-only by design. Only a
+title/body change re-embeds, and re-embedding is the caller's job (`queries.ts` stays
+synchronous and pure; the `vault` tool computes the vector).
 
 ### `deleteEntry()` — cascade + explicit index cleanup
 
-`sources` and `md_sync` fall away via `ON DELETE CASCADE`; the two virtual
-tables carry no foreign key, so they are cleared explicitly first, all in one
-transaction:
+`sources` falls away via `ON DELETE CASCADE`; the two virtual tables carry no foreign
+key, so they are cleared explicitly first, all in one transaction:
 
 ```
 BEGIN
   DELETE FROM vec_entries WHERE rowid = BigInt(id)
   DELETE FROM fts_entries WHERE rowid = id
-  DELETE FROM entries WHERE id = id        -- cascades sources + md_sync
+  DELETE FROM entries WHERE id = id        -- cascades sources
 COMMIT
 ```
-
-Used only by `import --md --prune`.
 
 ---
 
@@ -274,6 +273,7 @@ Used only by `import --md --prune`.
 | `entries_kind_idx` | entries | `(kind)` | Filter by entry kind |
 | `entries_project_idx` | entries | `(project)` | Filter by project name |
 | `entries_created_idx` | entries | `(created_at DESC)` | Recent-first listing |
+| `entries_status_idx` | entries | `(status)` | Exclude superseded/archived in recall |
 | `sources_entry_idx` | sources | `(entry_id)` | Lookup sources by entry |
 | `sessions_created_idx` | sessions | `(created_at DESC)` | Most-recent session |
 | `vec_entries` | virtual | `embedding float[384]` | L2 KNN via sqlite-vec |

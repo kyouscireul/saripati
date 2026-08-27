@@ -3,13 +3,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { openDb } from "../db/db.js";
 import { resolvePaths } from "../config.js";
 import { warmup } from "../embed/embedder.js";
-import { registerResearchTools } from "./tools/research.js";
-import { registerMemoryTools } from "./tools/memory.js";
+import { registerVaultTool } from "./tools/vault.js";
+import { registerEntryTools } from "./tools/entry.js";
 import { registerSessionTools } from "./tools/session.js";
 import { registerProjectTools } from "./tools/project.js";
 import { registerStatusTools } from "./tools/status.js";
 import { registerIdentityTools } from "./tools/identity.js";
-import { registerSyncTools } from "./tools/sync.js";
 import { banner, caps, VERSION } from "../term/theme.js";
 
 /**
@@ -29,27 +28,35 @@ export async function runMcp(argv: string[] = []): Promise<void> {
 
   // Front-load the model so the first tool call is fast and no load output
   // races the protocol handshake. Non-fatal if it fails (recall/save will retry).
+  // First run downloads ~90 MB and can stall 30–60s silently, so emit an
+  // elapsed-time heartbeat to stderr — otherwise users assume it hung.
+  const loadStart = Date.now();
+  process.stderr.write("saripati: loading embedding model…\n");
+  const heartbeat = setInterval(() => {
+    process.stderr.write(`saripati: loading embedding model… (${Math.round((Date.now() - loadStart) / 1000)}s)\n`);
+  }, 12_000);
+  if (typeof heartbeat.unref === "function") heartbeat.unref();
   try {
-    process.stderr.write("saripati: loading embedding model…\n");
     await warmup();
-    process.stderr.write("saripati: model ready.\n");
+    process.stderr.write(`saripati: model ready (${Math.round((Date.now() - loadStart) / 1000)}s).\n`);
   } catch (err) {
     process.stderr.write(
       `saripati: warning — embedding model failed to preload: ${
         err instanceof Error ? err.message : String(err)
       }\n`,
     );
+  } finally {
+    clearInterval(heartbeat);
   }
 
   const server = new McpServer({ name: "saripati", version: VERSION });
 
-  registerResearchTools(server, db);
-  registerMemoryTools(server, db);
+  registerVaultTool(server, db, paths);
+  registerEntryTools(server, db);
   registerSessionTools(server, db);
   registerProjectTools(server, db);
   registerStatusTools(server, db);
   registerIdentityTools(server, db);
-  registerSyncTools(server, db, paths);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
