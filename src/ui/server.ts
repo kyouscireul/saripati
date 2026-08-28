@@ -109,6 +109,7 @@ async function searchEntries(
   limit: number,
   semantic: boolean = false,
   status: EntryStatus | undefined = undefined,
+  offset: number = 0,
 ) {
   let rows: EntryRow[] = [];
   if (q && q.trim()) {
@@ -133,7 +134,10 @@ async function searchEntries(
       rows = hits.map((h) => map.get(h.id)).filter((e): e is NonNullable<typeof e> => !!e);
     }
   } else {
-    rows = listEntries(db, { kind, project: project ?? undefined, limit: (tag || project) ? 500 : limit });
+    // tag/project/non-active-status are JS-filtered after the SQL query, so we
+    // need a full fetch (500 cap) with no offset to avoid missing matching rows.
+    const jsFiltered = !!(tag || project || (status && status !== "active"));
+    rows = listEntries(db, { kind, project: project ?? undefined, limit: jsFiltered ? 500 : limit, offset: jsFiltered ? 0 : offset });
   }
 
   if (kind) rows = rows.filter((e) => e.kind === kind);
@@ -237,17 +241,34 @@ async function handle(
       ).all());
 
     if (p === "/api/graph") {
+      const NODE_CAP = 150;
       const ctx = buildLinkContext(db);
+
+      // Count how often each tag appears across all nodes so we can skip
+      // ubiquitous tags (e.g. "es-memory" on 1000 entries) that collapse
+      // everything into a hairball.  Any tag on > 25 % of the visible nodes
+      // is treated as noise and excluded from tag-type edge creation.
+      const tagFreq = new Map<string, number>();
+      for (const n of ctx.nodes) for (const t of n.tags) tagFreq.set(t, (tagFreq.get(t) ?? 0) + 1);
+      const rareThreshold = Math.ceil(Math.min(ctx.nodes.length, NODE_CAP) * 0.25);
+
       const bodies = new Map(allEntries(db).map((e) => [e.id, e.body]));
       const seen = new Set<string>();
       const edges: { from: number; to: number; type: string }[] = [];
-      for (const node of ctx.nodes.slice(0, 300)) {
+      for (const node of ctx.nodes.slice(0, NODE_CAP)) {
         for (const link of deriveLinks(ctx, node, bodies.get(node.id) ?? "")) {
+          if (link.type === "tag") {
+            // Only keep tag edges where the two nodes share at least one rare tag.
+            const hasRare = node.tags.some(
+              (t) => link.to.tags.includes(t) && (tagFreq.get(t) ?? 0) <= rareThreshold,
+            );
+            if (!hasRare) continue;
+          }
           const key = `${Math.min(node.id, link.to.id)}:${Math.max(node.id, link.to.id)}:${link.type}`;
           if (!seen.has(key)) { seen.add(key); edges.push({ from: node.id, to: link.to.id, type: link.type }); }
         }
       }
-      return json(res, 200, { nodes: ctx.nodes.slice(0, 300), edges: edges.slice(0, 600) });
+      return json(res, 200, { nodes: ctx.nodes.slice(0, NODE_CAP), edges: edges.slice(0, 600) });
     }
 
     const blMatch = p.match(/^\/api\/backlinks\/(\d+)$/);
@@ -269,9 +290,10 @@ async function handle(
       const tag = url.searchParams.get("tag");
       const project = url.searchParams.get("project");
       const entryStatus = parseStatus(url.searchParams.get("status"));
-      const limit = Math.min(Number(url.searchParams.get("limit") ?? 100) || 100, 500);
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? 50) || 50, 500);
+      const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0) || 0);
       const useSemantic = semanticMode || url.searchParams.get("semantic") === "1" || url.searchParams.get("semantic") === "true";
-      const entries = await searchEntries(db, q, kind, tag, project, limit, useSemantic, entryStatus);
+      const entries = await searchEntries(db, q, kind, tag, project, limit, useSemantic, entryStatus, offset);
       return json(res, 200, entries);
     }
 

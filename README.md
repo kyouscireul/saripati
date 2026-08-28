@@ -133,8 +133,8 @@ A local browser UI built on **Preact 10 + HTM** (no CDN, no bundler — vendored
 | Tab | What it shows |
 |-----|---------------|
 | **Steer** | Live nudge console: open questions · active intentions · unread memos · stale projects. Retrieval trace (last `vault` recall — query, timestamp, scored results). Click any row to jump to the entry. |
-| **Entries** | Hybrid search · 7 kind chips · status chips (active / superseded / archived) · `@project` / tag filters · entry detail with sources, backlinks, typed links, lifecycle fields (`superseded_by`, `resolved`, `active`). |
-| **Graph** | Physics force-graph over derived links. |
+| **Entries** | Hybrid search · 7 kind chips · status chips (active / superseded / archived) · `@project` / tag filters · entry detail with sources, backlinks, typed links, lifecycle fields (`superseded_by`, `resolved`, `active`). Infinite scroll in browse mode (50 entries per page); search and filtered views fetch the full matching set. |
+| **Graph** | Physics force-graph over derived links. Up to 150 nodes; ubiquitous tags (appearing on >25 % of nodes) are excluded from edges so only meaningful connections appear. Scroll to zoom, drag canvas to pan, drag nodes to reposition. Camera persists after the initial auto-fit — use the **reset** button to re-fit. |
 | **Tags** | Tag cloud and frequency. |
 | **Identity** | Profile · companion config (stale\_days, conflict\_threshold, per-kind recall boosts) · session history. |
 

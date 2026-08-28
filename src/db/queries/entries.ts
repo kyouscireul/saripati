@@ -307,6 +307,7 @@ export interface ListFilters {
   project?: string;
   since?: string; // ISO date/time lower bound (created_at >= since)
   limit?: number;
+  offset?: number;
 }
 
 export function listEntries(db: DB, filters: ListFilters = {}): EntryRow[] {
@@ -325,9 +326,10 @@ export function listEntries(db: DB, filters: ListFilters = {}): EntryRow[] {
     params.since = filters.since;
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  const limit = Math.max(1, Math.min(filters.limit ?? 50, 500));
+  params.limit = Math.max(1, Math.min(filters.limit ?? 50, 500));
+  params.offset = Math.max(0, filters.offset ?? 0);
   const rows = db
-    .prepare(`SELECT * FROM entries ${where} ORDER BY created_at DESC LIMIT ${limit}`)
+    .prepare(`SELECT * FROM entries ${where} ORDER BY created_at DESC LIMIT @limit OFFSET @offset`)
     .all(params) as RawEntryRow[];
   return rows.map(hydrate);
 }

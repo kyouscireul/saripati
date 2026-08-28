@@ -64,7 +64,7 @@ a{color:var(--am)}
 .panel.hidden{display:none!important}
 /* ── Entries ─────────────────────────────────────────── */
 .entry-panel{flex-direction:row!important}
-.sidebar{width:360px;flex-shrink:0;border-right:1px solid var(--ln);display:flex;flex-direction:column;min-height:0}
+.sidebar{width:420px;flex-shrink:0;border-right:1px solid var(--ln);display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .sidebar-top{padding:12px 14px 10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--ln2);flex-shrink:0}
 .search-row{display:flex;gap:6px;position:relative}
 .search-wrap{position:relative;flex:1;display:flex;align-items:center}
@@ -86,7 +86,7 @@ a{color:var(--am)}
 .tag-active-val{color:var(--am);font-weight:600}
 .tag-clear{color:var(--er);cursor:pointer;margin-left:auto}
 .tag-clear:hover{text-decoration:underline}
-.entry-list{flex:1;overflow-y:auto;min-height:0}
+.entry-list{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
 .sidebar-footer{flex-shrink:0;padding:8px 14px;border-top:1px solid var(--ln2);display:flex;align-items:center;gap:10px;font-size:10px;color:var(--mt);letter-spacing:0.3px}
 .sf-dot{width:4px;height:4px;border-radius:50%;background:var(--ln);flex-shrink:0}
 .erow{padding:12px 14px;border-bottom:1px solid var(--ln2);cursor:pointer;transition:background .1s}
@@ -96,20 +96,20 @@ a{color:var(--am)}
 .erow-kind{font-size:10px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600}
 .erow-proj{font-size:10px;color:var(--mt);margin-left:auto;cursor:pointer}
 .erow-proj:hover{color:var(--am)}
-.erow-title{font-size:12px;color:var(--tx);line-height:1.35}
-.erow-tags{font-size:11px;color:var(--mt);margin-top:3px}
+.erow-title{font-size:12px;color:var(--tx);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.erow-tags{font-size:11px;color:var(--mt);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .no-results{padding:28px 14px;color:var(--mt);font-size:12px;text-align:center;line-height:1.6}
 /* ── Detail ──────────────────────────────────────────── */
 .detail{flex:1;display:flex;flex-direction:row;min-height:0;overflow:hidden}
 .det-scroll{flex:1;overflow-y:auto;min-height:0}
-.sessions-panel{width:240px;flex-shrink:0;border-left:1px solid var(--ln);overflow-y:auto;padding:20px 16px;display:flex;flex-direction:column;gap:12px}
+.sessions-panel{width:280px;flex-shrink:0;border-left:1px solid var(--ln);overflow-y:auto;overflow-x:hidden;padding:20px 16px;display:flex;flex-direction:column;gap:12px}
 .sp-hdr{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin-bottom:4px;flex-shrink:0}
-.sp-card{background:var(--sf);border:1px solid var(--ln2);border-radius:3px;padding:10px 12px;cursor:default}
-.sp-card-title{font-size:11px;color:var(--gd);font-weight:600;margin-bottom:4px;line-height:1.3}
+.sp-card{background:var(--sf);border:1px solid var(--ln2);border-radius:3px;padding:10px 12px;cursor:default;overflow:hidden}
+.sp-card-title{font-size:11px;color:var(--gd);font-weight:600;margin-bottom:4px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp-card-date{font-size:10px;color:var(--mt);margin-bottom:6px}
 .sp-card-summary{font-size:11px;color:var(--dm);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .sp-card-steps{margin-top:6px;display:flex;flex-direction:column;gap:2px}
-.sp-step{font-size:10px;color:var(--dm);display:flex;gap:5px;line-height:1.4}
+.sp-step{font-size:10px;color:var(--dm);display:flex;gap:5px;line-height:1.4;overflow:hidden}
 .sp-step-arrow{color:var(--gn);flex-shrink:0}
 .status-view{padding:36px 40px;max-width:560px}
 .stat-lbl{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin-bottom:14px}
@@ -187,7 +187,7 @@ a{color:var(--am)}
 .graph-reset:hover{background:var(--am10)}
 .graph-hint{position:absolute;bottom:14px;left:16px;font-size:10px;color:var(--mt);pointer-events:none}
 /* ── Tags ────────────────────────────────────────────── */
-.tags-wrap{max-width:680px;margin:28px auto;padding:0 24px;display:flex;flex-direction:column;gap:12px}
+.tags-wrap{padding:28px;display:flex;flex-direction:column;gap:12px}
 .tags-filter-row{display:flex;align-items:center;gap:14px;margin-bottom:12px}
 .tags-count{font-size:11px;color:var(--mt);flex-shrink:0}
 .tags-search{background:var(--sf);border:1px solid var(--ln);color:var(--tx);padding:5px 10px;border-radius:3px;font-size:12px;outline:none;flex:1}
@@ -201,7 +201,7 @@ a{color:var(--am)}
 .tag-bar-fill{height:100%;background:var(--am);border-radius:3px}
 .tag-count{font-size:11px;color:var(--dm);width:32px;text-align:right;flex-shrink:0}
 /* ── Identity ────────────────────────────────────────── */
-.id-inner{max-width:920px;margin:28px auto;padding:0 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.id-inner{padding:28px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .id-card{background:var(--sf);border:1px solid var(--ln);border-radius:3px;padding:18px 20px}
 .id-card.wide{grid-column:1/span 2}
 .id-lbl{font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase;margin-bottom:12px}
@@ -225,10 +225,10 @@ a{color:var(--am)}
 .sess-hist-step-arrow{color:var(--gn);flex-shrink:0}
 .id-empty{font-size:12px;color:var(--mt);padding:16px 0}
 /* ── Steer ───────────────────────────────────────────── */
-.steer-inner{max-width:920px;margin:28px auto;padding:0 28px}
+.steer-inner{padding:28px}
 .steer-lede{font-size:12px;color:var(--dm);line-height:1.6;margin-bottom:22px;display:flex;align-items:baseline;gap:8px}
 .steer-lede-mark{color:var(--am);font-size:13px}
-.steer-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.steer-grid{display:grid;grid-template-columns:1fr 260px;gap:16px}
 .steer-group{background:var(--sf);border:1px solid var(--ln);border-radius:3px;padding:16px 18px}
 .steer-group-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
 .steer-group-title{font-size:11px;letter-spacing:0.5px;color:var(--gd);text-transform:uppercase;font-weight:600}
@@ -410,7 +410,7 @@ function EntryRow({ entry, selected, onSelect, onProjectClick }) {
 }
 
 // ── Sidebar ───────────────────────────────────────────────
-function Sidebar({ query, onQuery, kindFilter, onKind, statusFilter, onStatus, tagFilter, onTagClear, projectFilter, onProjectClick, entries, selectedId, onSelect, onExport, status, totalCount }) {
+function Sidebar({ query, onQuery, kindFilter, onKind, statusFilter, onStatus, tagFilter, onTagClear, projectFilter, onProjectClick, entries, selectedId, onSelect, onExport, status, totalCount, sentinelRef, hasMore }) {
   const KINDS = ALL_KINDS;
   const STATUSES = ['active', 'superseded', 'archived'];
   const inputRef = useRef(null);
@@ -481,6 +481,7 @@ function Sidebar({ query, onQuery, kindFilter, onKind, statusFilter, onStatus, t
           : entries.map(e => html`
             <${EntryRow} key=${e.id} entry=${e} selected=${selectedId === e.id}
               onSelect=${onSelect} onProjectClick=${onProjectClick}/>`)}
+        ${hasMore && html`<div ref=${sentinelRef} style="height:1px;flex-shrink:0"></div>`}
       </div>
       <div class="sidebar-footer">
         <span>${status?.total ?? '–'} entries</span>
@@ -500,12 +501,7 @@ function CorpusStatus({ status }) {
   if (!status) return html`<div class="status-view"><div class="stat-lbl">loading…</div></div>`;
   const total = status.total || 0;
   const max = Math.max(1, total);
-  const kinds = [
-    { k: 'research', label: 'research' },
-    { k: 'note', label: 'note' },
-    { k: 'decision', label: 'decision' },
-    { k: 'pattern', label: 'pattern' },
-  ];
+  const kinds = ALL_KINDS.map(k => ({ k, label: k }));
   return html`
     <div class="status-view">
       <div class="stat-lbl">Corpus Status</div>
@@ -720,11 +716,17 @@ function EntryDetail({ entryId, writeOn, onWikiClick, onBacklinkClick, allEntrie
 }
 
 // ── Entries panel ─────────────────────────────────────────
+const PAGE = 50;
+
 function EntriesPanel({ active, status, writeOn, selectedId, onSelectId, query, onQuery, kindFilter, onKind, statusFilter, onStatus, tagFilter, onTagFilter, projectFilter, onProjectFilter }) {
   const [entries, setEntries] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
   const debounce = useRef(null);
+  const offsetRef = useRef(0);
+  const sentinelRef = useRef(null);
+  const filtersRef = useRef({ q: '', kind: '', tag: '', project: '', status: '' });
 
-  const loadEntries = useCallback((q, kind, tag, project, entryStatus) => {
+  const fetchPage = useCallback(async (q, kind, tag, project, entryStatus, offset, append) => {
     const p = new URLSearchParams();
     if (q) p.set('q', q);
     if (kind) p.set('kind', kind);
@@ -732,13 +734,45 @@ function EntriesPanel({ active, status, writeOn, selectedId, onSelectId, query, 
     if (project) p.set('project', project);
     if (entryStatus) p.set('status', entryStatus);
     p.set('semantic', '1');
-    api(`/api/entries?${p}`).then(data => setEntries(data || []));
+    // Only paginate when browsing without a text query — search returns ranked results.
+    if (!q) {
+      p.set('limit', String(PAGE));
+      p.set('offset', String(offset));
+    }
+    const data = await api(`/api/entries?${p}`);
+    const rows = data || [];
+    if (append) setEntries(prev => [...prev, ...rows]);
+    else setEntries(rows);
+    // Paginate only in plain browse mode — search, tag/project/non-active-status
+    // filters fetch a full set server-side so infinite scroll is not needed.
+    const paginating = !q && !tag && !project && (!entryStatus || entryStatus === 'active');
+    setHasMore(paginating && rows.length === PAGE);
   }, []);
 
   useEffect(() => {
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => loadEntries(query, kindFilter, tagFilter, projectFilter, statusFilter), 180);
+    const { q, kind, tag, project, status: st } = { q: query, kind: kindFilter, tag: tagFilter, project: projectFilter, status: statusFilter };
+    debounce.current = setTimeout(() => {
+      offsetRef.current = 0;
+      filtersRef.current = { q, kind, tag, project, status: st };
+      fetchPage(q, kind, tag, project, st, 0, false);
+    }, 180);
   }, [query, kindFilter, tagFilter, projectFilter, statusFilter]);
+
+  // IntersectionObserver — load next page when sentinel scrolls into view.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      const nextOffset = offsetRef.current + PAGE;
+      offsetRef.current = nextOffset;
+      const { q, kind, tag, project, status: st } = filtersRef.current;
+      fetchPage(q, kind, tag, project, st, nextOffset, true);
+    }, { threshold: 0.1 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, fetchPage]);
 
   const handleExport = () => {
     const p = new URLSearchParams();
@@ -765,7 +799,8 @@ function EntriesPanel({ active, status, writeOn, selectedId, onSelectId, query, 
         tagFilter=${tagFilter} onTagClear=${() => onTagFilter('')}
         projectFilter=${projectFilter} onProjectClick=${onProjectFilter}
         entries=${entries} selectedId=${selectedId} onSelect=${onSelectId}
-        onExport=${handleExport} status=${status} totalCount=${status?.total}/>
+        onExport=${handleExport} status=${status} totalCount=${status?.total}
+        sentinelRef=${sentinelRef} hasMore=${hasMore}/>
       <div class="detail">
         ${selectedId ? html`
           <div class="det-scroll">
@@ -785,7 +820,8 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const [legendOpen, setLegendOpen] = useState(true);
-  const G = useRef({ nodes:[], edges:[], raf:null, dragging:null, dragStart:null, hovered:null, ctx:null });
+  const G = useRef({ nodes:[], edges:[], raf:null, dragging:null, dragStart:null, hovered:null, ctx:null,
+    scale:1, panX:0, panY:0, panning:false, panStart:null, _frame:0, _userViewport:false });
 
   const initGraph = useCallback((canvas, data) => {
     const W = canvas.width;
@@ -793,21 +829,24 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
     const ctx = canvas.getContext('2d');
     G.current.ctx = ctx;
 
-    // Spread nodes over a larger area so repulsion doesn't blast them on frame 1.
-    G.current.nodes = (data.nodes || []).slice(0, 300).map((n, i, arr) => {
+    // Place nodes on a circle sized to match the canvas; unclamped physics
+    // will spread them outward, and fitToView() shows the full layout at settle.
+    G.current.nodes = (data.nodes || []).slice(0, 150).map((n, i, arr) => {
       const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
-      const r = Math.min(W, H) * 0.42;
+      const r = Math.min(W, H) * 0.38;
       return { id: n.id, title: n.title, kind: n.kind,
         x: W/2 + Math.cos(angle)*r, y: H/2 + Math.sin(angle)*r,
         vx:0, vy:0, pinned:false };
     });
+    G.current.nodeMap = new Map(G.current.nodes.map(n => [n.id, n]));
     G.current.edges = (data.edges || []).slice(0, 600);
-    G.current.dragging = null;
-    G.current.dragStart = null;
+    G.current.dragging = null; G.current.dragStart = null;
+    G.current.scale = 1; G.current.panX = 0; G.current.panY = 0;
+    G.current.panning = false; G.current.panStart = null;
+    G.current._frame = 0;
 
-    // Pre-warm without noise: spread nodes from the initial circle before the
-    // first visible frame so they don't blast apart on load.
-    for (let t = 0; t < 120; t++) physicsStep(canvas, G.current, false);
+    // Pre-warm without noise so nodes partially spread before the first visible frame.
+    for (let t = 0; t < 80; t++) physicsStep(canvas, G.current, false);
 
     if (G.current.raf) cancelAnimationFrame(G.current.raf);
     tick(canvas, G.current, selectedId);
@@ -854,60 +893,108 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
     const H = canvas.height || 600;
     G.current.nodes.forEach((n, i, arr) => {
       const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
-      n.x = W/2 + Math.cos(angle) * Math.min(W,H) * 0.42;
-      n.y = H/2 + Math.sin(angle) * Math.min(W,H) * 0.42;
+      n.x = W/2 + Math.cos(angle) * Math.min(W,H) * 0.38;
+      n.y = H/2 + Math.sin(angle) * Math.min(W,H) * 0.38;
       n.vx = 0; n.vy = 0; n.pinned = false;
     });
-    // Pre-warm without noise so reset doesn't blast apart.
-    for (let t = 0; t < 120; t++) physicsStep(canvas, G.current, false);
+    G.current.scale = 1; G.current.panX = 0; G.current.panY = 0;
+    G.current._frame = 0; G.current._userViewport = false;
+    for (let t = 0; t < 80; t++) physicsStep(canvas, G.current, false);
+    restartTick(canvas, G.current, selectedId);
   };
 
+  // Helper: screen coords from mouse event (not world-projected)
+  const screenCoords = useCallback(e => {
+    const r = canvasRef.current.getBoundingClientRect();
+    const W = canvasRef.current.width, H = canvasRef.current.height;
+    return { sx: (e.clientX - r.left) * (W / r.width), sy: (e.clientY - r.top) * (H / r.height) };
+  }, []);
+
+  // Helper: screen → world coords
+  const toWorld = useCallback((sx, sy) => {
+    const sc = G.current.scale || 1;
+    return { x: (sx - (G.current.panX || 0)) / sc, y: (sy - (G.current.panY || 0)) / sc };
+  }, []);
+
   const onMouseDown = useCallback(e => {
-    const pos = canvasPos(e, canvasRef.current);
+    const { sx, sy } = screenCoords(e);
+    const pos = toWorld(sx, sy);
     const hit = hitNode(pos, G.current.nodes);
     if (hit) {
       hit.pinned = true;
       G.current.dragging = hit;
-      G.current.dragStart = { x: pos.x, y: pos.y }; // record for click-vs-drag
-      G.current.settled = false;
+      G.current.dragStart = { x: pos.x, y: pos.y };
+      restartTick(canvasRef.current, G.current, selectedId);
+    } else {
+      G.current.panning = true;
+      G.current._userViewport = true;
+      G.current.panStart = { sx, sy, px: G.current.panX || 0, py: G.current.panY || 0 };
     }
-  }, []);
+  }, [selectedId]);
 
   const onMouseMove = useCallback(e => {
-    const pos = canvasPos(e, canvasRef.current);
+    const { sx, sy } = screenCoords(e);
     if (G.current.dragging) {
+      const pos = toWorld(sx, sy);
       G.current.dragging.x = pos.x;
       G.current.dragging.y = pos.y;
       G.current.dragging.vx = 0;
       G.current.dragging.vy = 0;
       return;
     }
-    G.current.hovered = hitNode(pos, G.current.nodes);
+    if (G.current.panning) {
+      G.current.panX = G.current.panStart.px + (sx - G.current.panStart.sx);
+      G.current.panY = G.current.panStart.py + (sy - G.current.panStart.sy);
+      if (!G.current.raf) drawGraph(canvasRef.current, G.current, selectedId);
+      return;
+    }
+    G.current.hovered = hitNode(toWorld(sx, sy), G.current.nodes);
   }, [selectedId]);
 
   const onMouseUp = useCallback(e => {
+    if (G.current.panning) {
+      G.current.panning = false; G.current.panStart = null; return;
+    }
     if (!G.current.dragging) return;
-    const pos = canvasPos(e, canvasRef.current);
+    const { sx, sy } = screenCoords(e);
+    const pos = toWorld(sx, sy);
     const start = G.current.dragStart || pos;
-    const dist = Math.sqrt((pos.x - start.x) ** 2 + (pos.y - start.y) ** 2);
+    const sc = G.current.scale || 1;
+    const dist = Math.sqrt((pos.x - start.x)**2 + (pos.y - start.y)**2) * sc;
     const id = G.current.dragging.id;
     G.current.dragging.pinned = false;
     G.current.dragging = null;
     G.current.dragStart = null;
-    // Only navigate away on a genuine click (< 8px movement).
-    // A drag just releases the node and stays on the graph.
     if (dist < 8) onSelect(id);
-    // drag: just release — physics keeps running naturally
   }, [onSelect]);
+
+  const onWheel = useCallback(e => {
+    e.preventDefault();
+    const { sx, sy } = screenCoords(e);
+    const sc = G.current.scale || 1;
+    const newSc = Math.min(4, Math.max(0.15, sc * (e.deltaY < 0 ? 1.12 : 1/1.12)));
+    G.current.panX = sx - (sx - (G.current.panX || 0)) * newSc / sc;
+    G.current.panY = sy - (sy - (G.current.panY || 0)) * newSc / sc;
+    G.current.scale = newSc;
+    G.current._userViewport = true;
+    if (!G.current.raf) drawGraph(canvasRef.current, G.current, selectedId);
+  }, [selectedId]);
+
+  const zoomStep = (factor) => {
+    G.current.scale = Math.min(4, Math.max(0.15, (G.current.scale || 1) * factor));
+    G.current._userViewport = true;
+    if (!G.current.raf) drawGraph(canvasRef.current, G.current, selectedId);
+  };
 
   return html`
     <div class=${`panel${active ? '' : ' hidden'}`}>
       <div ref=${wrapRef} class="graph-wrap">
         <canvas class="graph-canvas" ref=${canvasRef}
           onMouseDown=${onMouseDown} onMouseMove=${onMouseMove} onMouseUp=${onMouseUp}
-          onMouseLeave=${() => { G.current.hovered = null; G.current.dragging = null; }}/>
+          onWheel=${onWheel}
+          onMouseLeave=${() => { G.current.hovered = null; G.current.dragging = null; G.current.panning = false; }}/>
       </div>
-      
+
       <div class=${`graph-legend${legendOpen ? '' : ' collapsed'}`} onClick=${() => !legendOpen && setLegendOpen(true)}>
         <div class="legend-hdr">
           <span>Legend</span>
@@ -922,17 +1009,22 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
             <div class="legend-row"><span class="legend-edge" style="background:var(--gn)"></span>project</div>
             <div class="legend-row"><span class="legend-edge" style="background:rgba(128,128,128,0.5)"></span>tag</div>
             <div class="legend-sec">NODES</div>
-            <div class="legend-row"><span class="legend-node" style="background:var(--kr)"></span>research</div>
-            <div class="legend-row"><span class="legend-node" style="background:var(--kd)"></span>decision</div>
-            <div class="legend-row"><span class="legend-node" style="background:var(--kp)"></span>pattern</div>
-            <div class="legend-row"><span class="legend-node" style="background:var(--kn)"></span>note</div>
+            <div class="legend-row"><span class="legend-node" style=${{background:kindColor('research')}}></span>research</div>
+            <div class="legend-row"><span class="legend-node" style=${{background:kindColor('decision')}}></span>decision</div>
+            <div class="legend-row"><span class="legend-node" style=${{background:kindColor('pattern')}}></span>pattern</div>
+            <div class="legend-row"><span class="legend-node" style=${{background:kindColor('note')}}></span>note</div>
+            <div class="legend-row"><span class="legend-node" style=${{background:kindColor('memo')}}></span>memo</div>
+            <div class="legend-row"><span class="legend-node" style=${{background:kindColor('question')}}></span>question</div>
+            <div class="legend-row"><span class="legend-node" style=${{background:kindColor('intention')}}></span>intention</div>
           </Fragment>`}
       </div>
-      
+
       <div class="graph-controls">
-        <button class="graph-reset" onClick=${resetGraph}>reset layout</button>
+        <button class="graph-reset" onClick=${() => zoomStep(1.25)}>+</button>
+        <button class="graph-reset" onClick=${() => zoomStep(1/1.25)}>−</button>
+        <button class="graph-reset" onClick=${resetGraph}>reset</button>
       </div>
-      <div class="graph-hint">drag to rearrange · click node to inspect</div>
+      <div class="graph-hint">drag node · drag canvas to pan · scroll to zoom · click node to inspect</div>
     </div>`;
 }
 
@@ -950,12 +1042,12 @@ function hitNode(pos, nodes) {
 }
 
 // Pure physics step — no drawing, no settled state.
-// NOISE keeps nodes breathing permanently; DAMP prevents runaway.
+// Nodes are unclamped and live in world space; fitToView() adapts the viewport.
 function physicsStep(canvas, G, noisy) {
-  const REP=3800, SPR=0.014, DAMP=0.88, REST=125, GRAV=0.0025;
-  const NOISE = noisy ? 0.18 : 0;
+  const REP=2800, SPR=0.012, DAMP=0.86, REST=160, GRAV=0.0008;
+  const NOISE = noisy ? 0.14 : 0;
   const W = canvas.width, H = canvas.height;
-  const nodeById = id => G.nodes.find(n => n.id === id);
+  const nodeById = id => G.nodeMap?.get(id);
 
   for (const e of G.edges) {
     const s = nodeById(e.from), t = nodeById(e.to);
@@ -969,6 +1061,8 @@ function physicsStep(canvas, G, noisy) {
   for (let i = 0; i < G.nodes.length; i++) {
     const n = G.nodes[i];
     if (n.pinned) continue;
+    // Weak gravity toward canvas centre — keeps the cluster from drifting away
+    // but is light enough to let repulsion spread nodes beyond canvas bounds.
     let fx = (W/2 - n.x) * GRAV + (Math.random()-0.5)*NOISE;
     let fy = (H/2 - n.y) * GRAV + (Math.random()-0.5)*NOISE;
     for (let j = 0; j < G.nodes.length; j++) {
@@ -978,24 +1072,59 @@ function physicsStep(canvas, G, noisy) {
       fx += dx/d*REP/d2; fy += dy/d*REP/d2;
     }
     n.vx = (n.vx+fx)*DAMP; n.vy = (n.vy+fy)*DAMP;
-    n.x = Math.max(20, Math.min(W-20, n.x+n.vx));
-    n.y = Math.max(20, Math.min(H-20, n.y+n.vy));
+    // Unclamped — nodes spread freely; zoom/pan + fitToView handle navigation.
+    n.x += n.vx;
+    n.y += n.vy;
   }
 }
 
-// Always runs — physics never stops. Thermal noise keeps it alive.
+// Zoom/pan so all nodes are visible with padding.
+function fitToView(canvas, G) {
+  if (!G.nodes || !G.nodes.length) return;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of G.nodes) {
+    if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
+    if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
+  }
+  const W = canvas.width, H = canvas.height;
+  const pw = maxX - minX || 1, ph = maxY - minY || 1;
+  const sc = Math.min((W - 80) / pw, (H - 80) / ph, 2.5);
+  G.scale = sc;
+  G.panX = (W - pw * sc) / 2 - minX * sc;
+  G.panY = (H - ph * sc) / 2 - minY * sc;
+}
+
+// Layout phase (noisy) then drain phase, hard-stop at frame 450.
+// fitToView() fires once on initial load/reset; skipped if user has already
+// panned or zoomed (_userViewport flag).
 function tick(canvas, G, selectedId) {
-  physicsStep(canvas, G, true);
+  G._frame = (G._frame || 0) + 1;
+  physicsStep(canvas, G, G._frame < 150);
   drawGraph(canvas, G, selectedId);
+  if (G._frame >= 450) {
+    if (!G._userViewport) {
+      fitToView(canvas, G);
+      drawGraph(canvas, G, selectedId);
+      G._userViewport = true; // preserve user viewport on subsequent node drags
+    }
+    G.raf = null; return;
+  }
   G.raf = requestAnimationFrame(() => tick(canvas, G, selectedId));
+}
+
+function restartTick(canvas, G, selectedId) {
+  if (G.raf) return;
+  G._frame = 0;
+  tick(canvas, G, selectedId);
 }
 
 function drawGraph(canvas, G, selectedId) {
   if (!canvas || !G.ctx) return;
   const ctx = G.ctx, W = canvas.width, H = canvas.height;
+  const sc = G.scale || 1, px = G.panX || 0, py = G.panY || 0;
   const activeTheme = document.documentElement.getAttribute('data-theme') || 'light';
   const col = GRAPH_COLORS[activeTheme] || GRAPH_COLORS.light;
-  const nodeById = id => G.nodes.find(n => n.id === id);
+  const nodeById = id => G.nodeMap?.get(id);
 
   ctx.fillStyle = col.bg;
   ctx.fillRect(0, 0, W, H);
@@ -1009,6 +1138,8 @@ function drawGraph(canvas, G, selectedId) {
   }
 
   ctx.save();
+  ctx.setTransform(sc, 0, 0, sc, px, py);
+
   for (const e of G.edges) {
     const s = nodeById(e.from), t = nodeById(e.to);
     if (!s || !t) continue;
@@ -1017,7 +1148,7 @@ function drawGraph(canvas, G, selectedId) {
     ctx.globalAlpha = e.type === 'wikilink' ? 0.75 : 0.4;
     ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
   }
-  ctx.globalAlpha = 1; ctx.restore();
+  ctx.globalAlpha = 1;
 
   for (const n of G.nodes) {
     const isSel = n.id === selectedId;
@@ -1038,6 +1169,7 @@ function drawGraph(canvas, G, selectedId) {
       ctx.fillText(lbl, n.x+16, n.y+3);
     }
   }
+  ctx.restore();
 }
 
 // ── Tags panel ────────────────────────────────────────────
