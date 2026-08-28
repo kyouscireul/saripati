@@ -14,7 +14,7 @@ import {
   lastEntryAtByProject,
   type EntryRow,
 } from "../../db/queries.js";
-import { jsonResult } from "./_result.js";
+import { bannerResult, jsonResult } from "./_result.js";
 
 const DEFAULT_STALE_DAYS = 21;
 
@@ -71,7 +71,7 @@ export function registerSessionTools(server: McpServer, db: DB): void {
         })
         .map((p) => ({ name: p.name, stack: p.stack, last_entry_at: lastByProject[p.name] }));
 
-      return jsonResult("Session context loaded.", {
+      return bannerResult("Session context loaded.", {
         identity,
         focus,
         latest_session: session,
@@ -103,7 +103,7 @@ export function registerSessionTools(server: McpServer, db: DB): void {
     },
     async (args) => {
       const id = insertSession(db, args.title, args.summary, args.next_steps ?? []);
-      return jsonResult(`Saved session #${id}: "${args.title}".`, {
+      return bannerResult(`Saved session #${id}: "${args.title}".`, {
         id,
         next_steps: args.next_steps ?? [],
       });

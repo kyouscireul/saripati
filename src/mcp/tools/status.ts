@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DB } from "../../db/db.js";
 import { corpusStatus, lastEntryAtByProject } from "../../db/queries.js";
-import { jsonResult } from "./_result.js";
+import { bannerResult } from "./_result.js";
 
 export function registerStatusTools(server: McpServer, db: DB): void {
   server.registerTool(
@@ -17,7 +17,7 @@ export function registerStatusTools(server: McpServer, db: DB): void {
     },
     async () => {
       const status = corpusStatus(db);
-      return jsonResult(
+      return bannerResult(
         `Vault holds ${status.total} entr${status.total === 1 ? "y" : "ies"} across ${
           Object.keys(status.byKind).length
         } kind(s).`,
