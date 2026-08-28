@@ -224,6 +224,39 @@ a{color:var(--am)}
 .sess-hist-step{font-size:10px;color:var(--dm);display:flex;gap:5px;line-height:1.4}
 .sess-hist-step-arrow{color:var(--gn);flex-shrink:0}
 .id-empty{font-size:12px;color:var(--mt);padding:16px 0}
+/* ── Steer ───────────────────────────────────────────── */
+.steer-inner{max-width:920px;margin:28px auto;padding:0 28px}
+.steer-lede{font-size:12px;color:var(--dm);line-height:1.6;margin-bottom:22px;display:flex;align-items:baseline;gap:8px}
+.steer-lede-mark{color:var(--am);font-size:13px}
+.steer-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.steer-group{background:var(--sf);border:1px solid var(--ln);border-radius:3px;padding:16px 18px}
+.steer-group-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.steer-group-title{font-size:11px;letter-spacing:0.5px;color:var(--gd);text-transform:uppercase;font-weight:600}
+.steer-group-count{font-size:11px;color:var(--mt);background:var(--sf3);border-radius:9px;padding:1px 8px;min-width:20px;text-align:center}
+.steer-group-hint{font-size:10px;color:var(--mt);margin-bottom:12px}
+.steer-empty{font-size:11px;color:var(--mt);padding:8px 0;font-style:italic}
+.steer-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--sf2);border:1px solid var(--ln2);border-radius:3px;margin-bottom:6px;cursor:pointer;transition:background .1s,border-color .1s}
+.steer-row:hover{border-color:var(--am25);background:var(--sel)}
+.steer-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.steer-row-title{font-size:12px;color:var(--tx);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.steer-row-proj{font-size:10px;color:var(--am);flex-shrink:0}
+.steer-row-stale{font-size:10px;color:var(--mt);flex-shrink:0}
+.steer-row-score{font-size:10px;color:var(--dm);font-variant-numeric:tabular-nums;flex-shrink:0}
+.steer-trace{margin-top:16px;background:var(--sf);border:1px solid var(--ln);border-radius:3px;padding:16px 18px}
+.steer-trace-q{font-size:12px;color:var(--tx);margin-bottom:10px;display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.steer-trace-at{font-size:10px;color:var(--mt);flex-shrink:0}
+/* ── Status chips + lifecycle ────────────────────────── */
+.status-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.schip{font-size:10px;letter-spacing:0.3px;text-transform:uppercase;color:var(--dm);background:var(--sf2);border:1px solid var(--ln2);border-radius:3px;padding:3px 8px;cursor:pointer;transition:color .1s,border-color .1s}
+.schip:hover{color:var(--tx);border-color:var(--am25)}
+.schip.on{color:var(--am);border-color:var(--am25);background:var(--am10)}
+.det-super{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--sf);border:1px solid var(--er);border-radius:3px;margin-top:14px;cursor:pointer;font-size:12px;color:var(--er)}
+.det-super:hover{background:var(--sel)}
+.lifecycle-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--dm);cursor:pointer;margin-top:14px;user-select:none}
+.lifecycle-toggle input{cursor:pointer}
+.cfg-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
+.cfg-key{color:var(--mt)}
+.cfg-val{color:var(--tx);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -248,6 +281,9 @@ function kindColor(k) {
   return { research:'var(--kr)', note:'var(--kn)', decision:'var(--kd)', pattern:'var(--kp)',
     question:'var(--kq)', memo:'var(--km)', intention:'var(--ki)' }[k] ?? 'var(--mt)';
 }
+// The vault's seven kinds — one source of truth so the sidebar filter and the
+// entry-detail selector never drift apart (they used to hardcode only four).
+const ALL_KINDS = ['research', 'note', 'decision', 'pattern', 'question', 'memo', 'intention'];
 
 // ── Markdown renderer ────────────────────────────────────
 function inlineMd(raw) {
@@ -336,7 +372,7 @@ function Header({ theme, onTheme, writeCfg, writeOn, onWrite, semanticCfg, seman
 }
 
 // ── Tabs ─────────────────────────────────────────────────
-const TABS = ['entries', 'graph', 'tags', 'identity'];
+const TABS = ['steer', 'entries', 'graph', 'tags', 'identity'];
 function Tabs({ tab, onTab }) {
   return html`
     <div class="tabs">
@@ -374,8 +410,9 @@ function EntryRow({ entry, selected, onSelect, onProjectClick }) {
 }
 
 // ── Sidebar ───────────────────────────────────────────────
-function Sidebar({ query, onQuery, kindFilter, onKind, tagFilter, onTagClear, projectFilter, onProjectClick, entries, selectedId, onSelect, onExport, status, totalCount }) {
-  const KINDS = ['research', 'note', 'decision', 'pattern'];
+function Sidebar({ query, onQuery, kindFilter, onKind, statusFilter, onStatus, tagFilter, onTagClear, projectFilter, onProjectClick, entries, selectedId, onSelect, onExport, status, totalCount }) {
+  const KINDS = ALL_KINDS;
+  const STATUSES = ['active', 'superseded', 'archived'];
   const inputRef = useRef(null);
   const [isFocused, setIsFocused] = useState(false);
 
@@ -421,6 +458,11 @@ function Sidebar({ query, onQuery, kindFilter, onKind, tagFilter, onTagClear, pr
                 ${k} ${count != null ? html`<span class="kchip-count">${count}</span>` : ''}
               </button>`;
           })}
+        </div>
+        <div class="status-chips">
+          ${STATUSES.map(s => html`
+            <button key=${s} class=${`schip${statusFilter === s ? ' on' : ''}`}
+              onClick=${() => onStatus(s)}>${s}</button>`)}
         </div>
         ${tagFilter && html`
           <div class="tag-active">
@@ -521,7 +563,7 @@ function SessionsPanel({ sessions }) {
 }
 
 // ── Entry detail ──────────────────────────────────────────
-function EntryDetail({ entryId, onWikiClick, onBacklinkClick, allEntries }) {
+function EntryDetail({ entryId, writeOn, onWikiClick, onBacklinkClick, allEntries }) {
   const [data, setData] = useState(null);
   const [backlinks, setBacklinks] = useState([]);
   const [newTag, setNewTag] = useState('');
@@ -582,6 +624,13 @@ function EntryDetail({ entryId, onWikiClick, onBacklinkClick, allEntries }) {
     setData({ ...data, kind });
   };
 
+  // Lifecycle metadata patch (resolved for questions, active for intentions).
+  // Gated on writeOn at the call site; explicit user action only — never auto-flipped.
+  const patchLifecycle = async (patch) => {
+    const res = await fetch(`/api/entry/${entryId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch) });
+    if (res.ok) setData({ ...data, ...patch });
+  };
+
   return html`
     <div class="det-inner">
       <div class="det-meta">
@@ -596,22 +645,43 @@ function EntryDetail({ entryId, onWikiClick, onBacklinkClick, allEntries }) {
           CONFIDENCE — ${Math.round(data.confidence * 100)}%
           <div class="conf-track"><div class="conf-fill" style=${{ width: `${data.confidence*100}%` }}></div></div>
         </div>`}
+      ${data.superseded_by != null && html`
+        <div class="det-super" onClick=${() => onBacklinkClick(data.superseded_by)}>
+          <span>⤳ superseded by entry #${data.superseded_by} — open →</span>
+        </div>`}
+      ${data.kind === 'question' && (writeOn
+        ? html`<label class="lifecycle-toggle">
+            <input type="checkbox" checked=${data.resolved === true}
+              onChange=${e => patchLifecycle({ resolved: e.target.checked })}/>
+            mark resolved
+          </label>`
+        : (data.resolved === true && html`<span class="kind-pill" style=${{ background:'var(--kd)22', color:'var(--kd)', marginTop:'14px', display:'inline-block' }}>resolved</span>`))}
+      ${data.kind === 'intention' && (writeOn
+        ? html`<label class="lifecycle-toggle">
+            <input type="checkbox" checked=${data.active === true}
+              onChange=${e => patchLifecycle({ active: e.target.checked })}/>
+            still active
+          </label>`
+        : (data.active === false && html`<span class="kind-pill" style=${{ background:'var(--mt)22', color:'var(--mt)', marginTop:'14px', display:'inline-block' }}>inactive</span>`))}
       <div class="kind-wrap">
         <span style="color:var(--mt)">kind:</span>
-        <select class="kind-sel" value=${data.kind} onChange=${e => changeKind(e.target.value)}>
-          ${['research','note','decision','pattern'].map(k => html`<option key=${k} value=${k}>${k}</option>`)}
+        <select class="kind-sel" value=${data.kind} disabled=${!writeOn} onChange=${e => changeKind(e.target.value)}>
+          ${ALL_KINDS.map(k => html`<option key=${k} value=${k}>${k}</option>`)}
         </select>
-        <span style="font-size:10px;color:var(--mt)">markdown edits → Obsidian + import</span>
+        ${writeOn
+          ? html`<span style="font-size:10px;color:var(--mt)">edits save to the vault</span>`
+          : html`<span style="font-size:10px;color:var(--mt)">read-only — start with --write to edit</span>`}
       </div>
       <div class="det-tags">
         ${(data.tags || []).map(t => html`
           <span key=${t} class="tag-chip">
             #${t}
-            <button class="tag-rm" title="Remove tag" onClick=${() => removeTag(t)}>×</button>
+            ${writeOn && html`<button class="tag-rm" title="Remove tag" onClick=${() => removeTag(t)}>×</button>`}
           </span>`)}
-        <input class="tag-add-inp" placeholder="+ tag" value=${newTag}
-          onInput=${e => setNewTag(e.target.value)}
-          onKeyDown=${addTag}/>
+        ${writeOn && html`
+          <input class="tag-add-inp" placeholder="+ tag" value=${newTag}
+            onInput=${e => setNewTag(e.target.value)}
+            onKeyDown=${addTag}/>`}
       </div>
       <div class="det-body" ref=${bodyRef}></div>
       ${(data.sources || []).length > 0 && html`
@@ -623,6 +693,15 @@ function EntryDetail({ entryId, onWikiClick, onBacklinkClick, allEntries }) {
                 ? html`<a class="src-title" href=${s.url} target="_blank" rel="noopener">${s.title || s.url}</a>`
                 : html`<span class="src-title">${s.title || 'source'}</span>`}
               ${s.snippet && html`<div class="src-snip">${s.snippet}</div>`}
+            </div>`)}
+        </div>`}
+      ${(data.links || []).length > 0 && html`
+        <div class="det-section">
+          <div class="det-sec-title">Links</div>
+          ${data.links.map((l, i) => html`
+            <div key=${i} class="bl-row" onClick=${() => onBacklinkClick(l.id)}>
+              <span class="kind-pill" style=${{ background:'var(--am)22', color:'var(--am)' }}>${l.rel}</span>
+              <span class="bl-title">entry #${l.id}</span>
             </div>`)}
         </div>`}
       ${backlinks.length > 0 && html`
@@ -641,31 +720,25 @@ function EntryDetail({ entryId, onWikiClick, onBacklinkClick, allEntries }) {
 }
 
 // ── Entries panel ─────────────────────────────────────────
-function EntriesPanel({ active, status, selectedId, onSelectId, query, onQuery, kindFilter, onKind, tagFilter, onTagFilter }) {
+function EntriesPanel({ active, status, writeOn, selectedId, onSelectId, query, onQuery, kindFilter, onKind, statusFilter, onStatus, tagFilter, onTagFilter, projectFilter, onProjectFilter }) {
   const [entries, setEntries] = useState([]);
-  const [projectFilter, setProjectFilter] = useState('');
   const debounce = useRef(null);
 
-  const loadEntries = useCallback((q, kind, tag, project) => {
+  const loadEntries = useCallback((q, kind, tag, project, entryStatus) => {
     const p = new URLSearchParams();
     if (q) p.set('q', q);
     if (kind) p.set('kind', kind);
     if (tag) p.set('tag', tag);
     if (project) p.set('project', project);
+    if (entryStatus) p.set('status', entryStatus);
     p.set('semantic', '1');
     api(`/api/entries?${p}`).then(data => setEntries(data || []));
   }, []);
 
   useEffect(() => {
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => loadEntries(query, kindFilter, tagFilter, projectFilter), 180);
-  }, [query, kindFilter, tagFilter, projectFilter]);
-
-  const handleProjectClick = (project) => {
-    setProjectFilter(f => f === project ? '' : project);
-    onKind(''); // clear kind filter when filtering by project
-    onSelectId(null);
-  };
+    debounce.current = setTimeout(() => loadEntries(query, kindFilter, tagFilter, projectFilter, statusFilter), 180);
+  }, [query, kindFilter, tagFilter, projectFilter, statusFilter]);
 
   const handleExport = () => {
     const p = new URLSearchParams();
@@ -688,14 +761,15 @@ function EntriesPanel({ active, status, selectedId, onSelectId, query, onQuery, 
       <${Sidebar}
         query=${query} onQuery=${onQuery}
         kindFilter=${kindFilter} onKind=${onKind}
+        statusFilter=${statusFilter} onStatus=${onStatus}
         tagFilter=${tagFilter} onTagClear=${() => onTagFilter('')}
-        projectFilter=${projectFilter} onProjectClick=${handleProjectClick}
+        projectFilter=${projectFilter} onProjectClick=${onProjectFilter}
         entries=${entries} selectedId=${selectedId} onSelect=${onSelectId}
         onExport=${handleExport} status=${status} totalCount=${status?.total}/>
       <div class="detail">
         ${selectedId ? html`
           <div class="det-scroll">
-            <${EntryDetail} entryId=${selectedId} onWikiClick=${handleWiki} onBacklinkClick=${onSelectId} allEntries=${entries}/>
+            <${EntryDetail} entryId=${selectedId} writeOn=${writeOn} onWikiClick=${handleWiki} onBacklinkClick=${onSelectId} allEntries=${entries}/>
           </div>
           <${SessionsPanel} sessions=${status?.sessions_recent}/>
         ` : html`
@@ -1025,6 +1099,7 @@ function IdentityPanel({ active }) {
   const skills = Array.isArray(prefs.skills) ? prefs.skills : (prefs.skills ? [prefs.skills] : []);
   const cfg = identity?.companion_config || {};
   const traits = Array.isArray(cfg.values) ? cfg.values : Array.isArray(cfg.traits) ? cfg.traits : [];
+  const recallBoost = (cfg.recall_boost && typeof cfg.recall_boost === 'object') ? Object.entries(cfg.recall_boost) : [];
   const latestSession = sessions[0] || null;
   const pastSessions = sessions.slice(1);
 
@@ -1059,6 +1134,20 @@ function IdentityPanel({ active }) {
                     ${traits.map(t => html`<span key=${t} class="id-chip-trait">${t}</span>`)}
                   </div>`}`
               : html`<div class="id-empty">No companion set.</div>`}
+          </div>
+          <div class="id-card wide">
+            <div class="id-lbl">Companion Config — how the steerer tunes itself</div>
+            <div class="cfg-row"><span class="cfg-key">stale threshold</span><span class="cfg-val">${cfg.stale_days != null ? `${cfg.stale_days} days` : '21 days (default)'}</span></div>
+            <div class="cfg-row"><span class="cfg-key">conflict threshold</span><span class="cfg-val">${cfg.conflict_threshold != null ? cfg.conflict_threshold : '0.85 (default)'}</span></div>
+            ${recallBoost.length > 0
+              ? html`
+                <div class="det-sec-title" style="margin-top:12px;margin-bottom:8px">Recall Boost (per kind)</div>
+                ${recallBoost.map(([k, v]) => html`
+                  <div key=${k} class="cfg-row">
+                    <span class="cfg-key" style=${{ color: kindColor(k) }}>${k}</span>
+                    <span class="cfg-val">×${v}</span>
+                  </div>`)}`
+              : html`<div class="cfg-row"><span class="cfg-key">recall boost</span><span class="cfg-val">defaults</span></div>`}
           </div>`}
 
         ${latestSession ? html`
@@ -1097,9 +1186,92 @@ function IdentityPanel({ active }) {
     </div>`;
 }
 
+// ── Steer panel (nudges + retrieval trace) ────────────────
+function NudgeGroup({ title, hint, items, empty, render }) {
+  return html`
+    <div class="steer-group">
+      <div class="steer-group-hdr">
+        <span class="steer-group-title">${title}</span>
+        <span class="steer-group-count">${items.length}</span>
+      </div>
+      ${hint && html`<div class="steer-group-hint">${hint}</div>`}
+      ${items.length
+        ? items.map(render)
+        : html`<div class="steer-empty">${empty}</div>`}
+    </div>`;
+}
+
+function SteerPanel({ active, onSelect, onProjectClick }) {
+  const [nudges, setNudges] = useState(null);
+  const [trace, setTrace] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!active || loaded) return;
+    Promise.all([api('/api/nudges'), api('/api/last-fetch')]).then(([n, t]) => {
+      setNudges(n);
+      setTrace(t);
+      setLoaded(true);
+    });
+  }, [active]);
+
+  if (!loaded) return html`<div class=${`panel${active ? '' : ' hidden'}`}></div>`;
+
+  const n = nudges || {};
+  const entryRow = (e) => html`
+    <div key=${e.id} class="steer-row" onClick=${() => onSelect(e.id)}>
+      <span class="steer-dot" style=${{ background: kindColor(e.kind) }}></span>
+      <span class="steer-row-title">${e.title}</span>
+      ${e.project && html`<span class="steer-row-proj">@${e.project}</span>`}
+    </div>`;
+
+  return html`
+    <div class=${`panel${active ? '' : ' hidden'}`} style="overflow-y:auto">
+      <div class="steer-inner">
+        <div class="steer-lede">
+          <span class="steer-lede-mark">◈</span>
+          What to steer — the vault's open threads, drawn from what your past self left behind.
+        </div>
+        <div class="steer-grid">
+          <${NudgeGroup} title="Open Questions" hint="unanswered — resolve or investigate"
+            items=${n.unresolved_questions || []} empty="no open questions" render=${entryRow}/>
+          <${NudgeGroup} title="Live Intentions" hint="commitments still in flight"
+            items=${n.active_intentions || []} empty="no live intentions" render=${entryRow}/>
+          <${NudgeGroup} title="Unread Memos" hint="notes left for your future self"
+            items=${n.unread_memos || []} empty="no unread memos" render=${entryRow}/>
+          <${NudgeGroup} title="Stale Projects" hint="active, but untouched lately"
+            items=${n.stale_projects || []} empty="nothing gone stale"
+            render=${(pj) => html`
+              <div key=${pj.name} class="steer-row" onClick=${() => onProjectClick(pj.name)}>
+                <span class="steer-dot" style="background:var(--er)"></span>
+                <span class="steer-row-title">@${pj.name}</span>
+                <span class="steer-row-stale">${(pj.last_entry_at || '').slice(0,10)}</span>
+              </div>`}/>
+        </div>
+
+        <div class="steer-trace">
+          <div class="steer-group-hdr">
+            <span class="steer-group-title">Last Retrieved</span>
+          </div>
+          <div class="steer-group-hint">what the agent pulled on its most recent recall</div>
+          ${trace && trace.results && trace.results.length
+            ? html`
+              <div class="steer-trace-q">"${trace.query}"<span class="steer-trace-at">${(trace.at || '').slice(0,19).replace('T',' ')}</span></div>
+              ${trace.results.map((r) => html`
+                <div key=${r.id} class="steer-row" onClick=${() => onSelect(r.id)}>
+                  <span class="steer-dot" style=${{ background: kindColor(r.kind) }}></span>
+                  <span class="steer-row-title">${r.title}</span>
+                  <span class="steer-row-score">${(r.score ?? 0).toFixed(2)}</span>
+                </div>`)}`
+            : html`<div class="steer-empty">no recall yet — the agent hasn't queried the vault this session</div>`}
+        </div>
+      </div>
+    </div>`;
+}
+
 // ── App root ──────────────────────────────────────────────
 function App() {
-  const [tab, setTab] = useState('entries');
+  const [tab, setTab] = useState('steer');
   const [theme, setTheme] = useState(() => localStorage.getItem('saripati-theme') || 'light');
   const [writeCfg, setWriteCfg] = useState(false);
   const [writeOn, setWriteOn] = useState(true);
@@ -1111,7 +1283,9 @@ function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -1146,6 +1320,20 @@ function App() {
     setSelectedId(null);
   };
 
+  const handleStatusSelect = (s) => {
+    setStatusFilter(curr => curr === s ? '' : s);
+    setSelectedId(null);
+  };
+
+  // Toggle a project filter and route to the entries tab (used by the Steer tab
+  // and the @project chips). Clears kind so the project view isn't double-filtered.
+  const handleProjectSelect = (project) => {
+    setProjectFilter(f => f === project ? '' : project);
+    setKindFilter('');
+    setSelectedId(null);
+    setTab('entries');
+  };
+
   return html`
     <${Header}
       theme=${theme} onTheme=${setTheme}
@@ -1154,6 +1342,10 @@ function App() {
       entryCount=${status?.total}/>
     <${Tabs} tab=${tab} onTab=${setTab}/>
     <div class="panels">
+      <${SteerPanel}
+        active=${tab === 'steer'}
+        onSelect=${handleGraphSelect}
+        onProjectClick=${handleProjectSelect}/>
       <${EntriesPanel}
         active=${tab === 'entries'}
         status=${status}
@@ -1165,8 +1357,12 @@ function App() {
         onQuery=${setQuery}
         kindFilter=${kindFilter}
         onKind=${handleKindSelect}
+        statusFilter=${statusFilter}
+        onStatus=${handleStatusSelect}
         tagFilter=${tagFilter}
-        onTagFilter=${setTagFilter}/>
+        onTagFilter=${setTagFilter}
+        projectFilter=${projectFilter}
+        onProjectFilter=${handleProjectSelect}/>
       <${GraphPanel}
         active=${tab === 'graph'}
         theme=${theme}

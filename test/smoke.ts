@@ -25,6 +25,9 @@ import {
   getIdentity,
   upsertIdentity,
   clearIdentity,
+  unresolvedQuestions,
+  activeIntentions,
+  unreadMemos,
 } from "../src/db/queries.js";
 import { hybridSearch } from "../src/search/hybrid.js";
 import { buildLinkContext, deriveLinks, basenameFor } from "../src/graph/links.js";
@@ -285,6 +288,56 @@ async function main(): Promise<void> {
       "per-call boosts override flips the ranking",
     );
     console.log("  ✓ recall: superseded excluded by default; kind boost + override");
+  }
+
+  // 3f. Steerer nudge queries — the substance the /api/nudges endpoint wires --
+  {
+    // Self-contained fixtures so this section is independent of earlier mutations.
+    const openQId = insertEntry(
+      db,
+      { kind: "question", title: "Do we support multi-currency payouts?", body: "Still undecided.", resolved: false },
+      await embed("multi currency payout support open question"),
+    );
+    const answeredQId = insertEntry(
+      db,
+      { kind: "question", title: "Which DB for the cache?", body: "Answered: Redis.", resolved: true },
+      await embed("cache database choice answered redis"),
+    );
+    const liveIntentId = insertEntry(
+      db,
+      { kind: "intention", title: "Publish v0.3.1 Steerer Console", body: "Ship the UI pass.", active: true },
+      await embed("intention publish steerer console ui"),
+    );
+    const doneIntentId = insertEntry(
+      db,
+      { kind: "intention", title: "Publish v0.3.0", body: "Already shipped.", active: false },
+      await embed("intention publish v0.3.0 shipped"),
+    );
+    const freshMemoId = insertEntry(
+      db,
+      { kind: "memo", title: "Wire the Steer tab into the dashboard", body: "Reminder to self." },
+      await embed("memo wire steer tab dashboard reminder"),
+    );
+
+    const openQs = unresolvedQuestions(db);
+    assert.ok(openQs.some((e) => e.id === openQId), "unresolvedQuestions surfaces the open question");
+    assert.ok(!openQs.some((e) => e.id === answeredQId), "unresolvedQuestions excludes the answered one");
+
+    const intents = activeIntentions(db);
+    assert.ok(intents.some((e) => e.id === liveIntentId), "activeIntentions surfaces the live intention");
+    assert.ok(!intents.some((e) => e.id === doneIntentId), "activeIntentions excludes the inactive one");
+
+    // A memo created after a cutoff is 'unread'; one before it is not.
+    const before = new Date(Date.now() - 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+    const recentMemos = unreadMemos(db, before);
+    assert.ok(recentMemos.some((e) => e.id === freshMemoId), "unreadMemos surfaces a memo newer than the cutoff");
+    const futureCut = new Date(Date.now() + 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+    assert.ok(!unreadMemos(db, futureCut).some((e) => e.id === freshMemoId), "unreadMemos honors the since-cutoff");
+
+    // Marking the open question resolved drops it from the nudge (dashboard toggle path).
+    updateEntry(db, openQId, { resolved: true });
+    assert.ok(!unresolvedQuestions(db).some((e) => e.id === openQId), "resolving a question clears the nudge");
+    console.log("  ✓ nudges: unresolved questions / active intentions / unread memos filter correctly");
   }
 
   // 4. MCP loop ------------------------------------------------------------

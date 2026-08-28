@@ -17,7 +17,13 @@ import {
   getIdentity,
   allEntries,
   updateEntry,
+  unresolvedQuestions,
+  activeIntentions,
+  unreadMemos,
+  lastEntryAtByProject,
+  listProjects,
   type EntryKind,
+  type EntryStatus,
   type EntryRow,
 } from "../db/queries.js";
 import { buildLinkContext, deriveLinks } from "../graph/links.js";
@@ -72,6 +78,19 @@ function parseKind(v: string | null): EntryKind | undefined {
   return v && (KINDS as string[]).includes(v) ? (v as EntryKind) : undefined;
 }
 
+const STATUSES: EntryStatus[] = ["active", "superseded", "archived"];
+function parseStatus(v: string | null): EntryStatus | undefined {
+  return v && (STATUSES as string[]).includes(v) ? (v as EntryStatus) : undefined;
+}
+
+// Staleness cutoff — mirrors the `on` MCP tool (src/mcp/tools/session.ts) so the
+// dashboard's "stale projects" agrees with what the agent is nudged about. A
+// datetime('now')-format cutoff (UTC "YYYY-MM-DD HH:MM:SS") N days ago.
+const DEFAULT_STALE_DAYS = 21;
+function staleCutoff(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 19).replace("T", " ");
+}
+
 function timeline(db: DB): { day: string; count: number }[] {
   return db
     .prepare(
@@ -89,6 +108,7 @@ async function searchEntries(
   project: string | null,
   limit: number,
   semantic: boolean = false,
+  status: EntryStatus | undefined = undefined,
 ) {
   let rows: EntryRow[] = [];
   if (q && q.trim()) {
@@ -96,7 +116,11 @@ async function searchEntries(
     if (semantic) {
       try {
         const queryEmbedding = await embed(trimmed);
-        const hybridHits = hybridSearch(db, queryEmbedding, trimmed, { kind, limit: limit * 2 });
+        // Superseded/archived are excluded from recall by default; if the user is
+        // explicitly browsing a non-active status, opt them back in so the filter
+        // below has rows to match.
+        const includeSuperseded = status !== undefined && status !== "active";
+        const hybridHits = hybridSearch(db, queryEmbedding, trimmed, { kind, limit: limit * 2, includeSuperseded });
         rows = hybridHits.map((h) => h.entry);
       } catch {
         const hits = ftsSearch(db, trimmed, limit * 2);
@@ -115,6 +139,7 @@ async function searchEntries(
   if (kind) rows = rows.filter((e) => e.kind === kind);
   if (tag) rows = rows.filter((e) => e.tags.includes(tag));
   if (project) rows = rows.filter((e) => e.project === project);
+  if (status) rows = rows.filter((e) => e.status === status);
   return rows.slice(0, limit);
 }
 
@@ -174,6 +199,33 @@ async function handle(
 
     if (p === "/api/last-fetch") return json(res, 200, readLastFetch(dataDir));
 
+    // The steerer signals the `on` tool emits to the agent, surfaced to the human.
+    // Mirrors the tool's `nudges` block (src/mcp/tools/session.ts) EXCEPT it returns
+    // full EntryRows, not the tool's slim() projection — the dashboard needs kind /
+    // created_at / project for chips without a second fetch. Keep the two in step.
+    if (p === "/api/nudges") {
+      const identity = getIdentity(db);
+      const session = latestSessions(db, 1)[0] ?? null;
+      const staleDays =
+        typeof identity?.companion_config?.stale_days === "number"
+          ? (identity.companion_config.stale_days as number)
+          : DEFAULT_STALE_DAYS;
+      const staleAfter = staleCutoff(staleDays);
+      const lastByProject = lastEntryAtByProject(db);
+      const stale_projects = listProjects(db, "active")
+        .filter((proj) => {
+          const last = lastByProject[proj.name];
+          return last && last < staleAfter; // touched before, but not lately
+        })
+        .map((proj) => ({ name: proj.name, stack: proj.stack, last_entry_at: lastByProject[proj.name] }));
+      return json(res, 200, {
+        unresolved_questions: unresolvedQuestions(db, 20),
+        active_intentions: activeIntentions(db, 20),
+        unread_memos: unreadMemos(db, session?.created_at ?? null, 20),
+        stale_projects,
+      });
+    }
+
     if (p === "/api/status")
       return json(res, 200, { ...corpusStatus(db), timeline: timeline(db), sessions_recent: latestSessions(db, 5) });
 
@@ -216,9 +268,10 @@ async function handle(
       const kind = parseKind(url.searchParams.get("kind"));
       const tag = url.searchParams.get("tag");
       const project = url.searchParams.get("project");
+      const entryStatus = parseStatus(url.searchParams.get("status"));
       const limit = Math.min(Number(url.searchParams.get("limit") ?? 100) || 100, 500);
       const useSemantic = semanticMode || url.searchParams.get("semantic") === "1" || url.searchParams.get("semantic") === "true";
-      const entries = await searchEntries(db, q, kind, tag, project, limit, useSemantic);
+      const entries = await searchEntries(db, q, kind, tag, project, limit, useSemantic, entryStatus);
       return json(res, 200, entries);
     }
 
@@ -230,12 +283,30 @@ async function handle(
         return entry ? json(res, 200, entry) : json(res, 404, { error: "not found" });
       }
       if (method === "PATCH" && writeMode) {
-        let patch: { tags?: string[]; kind?: string } = {};
+        let patch: {
+          tags?: string[];
+          kind?: string;
+          status?: string;
+          superseded_by?: number | null;
+          resolved?: boolean | null;
+          active?: boolean | null;
+        } = {};
         try { patch = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: "invalid JSON" }); }
         if (patch.kind && !(KINDS as string[]).includes(patch.kind)) return json(res, 400, { error: "invalid kind" });
+        if (patch.status && !(STATUSES as string[]).includes(patch.status)) return json(res, 400, { error: "invalid status" });
+        if (patch.superseded_by !== undefined && patch.superseded_by !== null && typeof patch.superseded_by !== "number")
+          return json(res, 400, { error: "invalid superseded_by" });
+        if (patch.resolved !== undefined && patch.resolved !== null && typeof patch.resolved !== "boolean")
+          return json(res, 400, { error: "invalid resolved" });
+        if (patch.active !== undefined && patch.active !== null && typeof patch.active !== "boolean")
+          return json(res, 400, { error: "invalid active" });
         const updated = updateEntry(db, id, {
           tags: Array.isArray(patch.tags) ? patch.tags.map(String) : undefined,
           kind: patch.kind as EntryKind | undefined,
+          status: patch.status as EntryStatus | undefined,
+          superseded_by: patch.superseded_by,
+          resolved: patch.resolved,
+          active: patch.active,
         });
         return updated ? json(res, 200, updated) : json(res, 404, { error: "not found" });
       }
