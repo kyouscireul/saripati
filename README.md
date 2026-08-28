@@ -128,10 +128,17 @@ npx saripati ui --port 8080      # custom port
 ```
 
 A local browser UI built on **Preact 10 + HTM** (no CDN, no bundler — vendored ESM served at
-`/vendor/*.js`). Tabs: **Entries** (hybrid search · kind chips · `@project`/tag filters ·
-entry detail with sources + backlinks), **Graph** (physics force-graph over derived links),
-**Tags**, **Identity** (profile · companion · session history). Editing is **off by
-default** — pass `--write` to enable mutations.
+`/vendor/*.js`). Five tabs — **Steer** opens by default:
+
+| Tab | What it shows |
+|-----|---------------|
+| **Steer** | Live nudge console: open questions · active intentions · unread memos · stale projects. Retrieval trace (last `vault` recall — query, timestamp, scored results). Click any row to jump to the entry. |
+| **Entries** | Hybrid search · 7 kind chips · status chips (active / superseded / archived) · `@project` / tag filters · entry detail with sources, backlinks, typed links, lifecycle fields (`superseded_by`, `resolved`, `active`). |
+| **Graph** | Physics force-graph over derived links. |
+| **Tags** | Tag cloud and frequency. |
+| **Identity** | Profile · companion config (stale\_days, conflict\_threshold, per-kind recall boosts) · session history. |
+
+Editing is **off by default** — pass `--write` to enable mutations (kind, tags, status, resolved, active).
 
 ---
 
