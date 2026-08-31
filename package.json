@@ -1,6 +1,6 @@
 {
   "name": "saripati",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Local-first, provider-agnostic MCP knowledge vault + research capture. Give any AI host a persistent, compounding memory.",
   "type": "module",
   "bin": {
