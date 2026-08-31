@@ -84,7 +84,34 @@ async function main(): Promise<void> {
   const piped = caps({ isTTY: false } as NodeJS.WriteStream);
   assert.equal(piped.color, false, "non-TTY stream must disable colour");
   assert.equal(piped.unicode, false, "non-TTY stream must disable Unicode");
+
+  // SARIPATI_UNICODE forces the full presentation where TTY detection fails
+  // (Claude Code terminal, npx/npm shims, IDE consoles). Without it there is no
+  // way to ask for the rounded box — FORCE_COLOR alone yields colour on ASCII.
+  {
+    const off = { isTTY: false } as NodeJS.WriteStream;
+    process.env.SARIPATI_UNICODE = "1";
+    const forced = caps(off);
+    assert.equal(forced.unicode, true, "SARIPATI_UNICODE forces Unicode off-TTY");
+    assert.equal(forced.color, true, "forcing rich output implies colour");
+    assert.ok(banner("9.9.9", forced).includes("╭"), "forced banner uses the rounded box");
+
+    // The hard opt-outs must still beat the force flag.
+    process.env.SARIPATI_ASCII = "1";
+    assert.equal(caps(off).unicode, false, "SARIPATI_ASCII=1 overrides the force flag");
+    delete process.env.SARIPATI_ASCII;
+
+    const prevTerm = process.env.TERM;
+    process.env.TERM = "dumb";
+    assert.equal(caps(off).unicode, false, "TERM=dumb overrides the force flag");
+    if (prevTerm === undefined) delete process.env.TERM;
+    else process.env.TERM = prevTerm;
+
+    delete process.env.SARIPATI_UNICODE;
+    assert.equal(caps(off).unicode, false, "default off-TTY behaviour restored");
+  }
   console.log("  ✓ theme: colour/Unicode degrade to clean ASCII off-TTY; frame aligns");
+  console.log("  ✓ theme: SARIPATI_UNICODE forces rich output; ASCII/dumb opt-outs still win");
 
   // 0b. Legacy-vault migration — a v0.2.0 DB upgrades in place on openDb ----
   {

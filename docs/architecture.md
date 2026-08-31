@@ -241,6 +241,14 @@ score(id) = Σ  1 / (RRF_K + rank_i + 1)
   stream: colour requires a TTY and no `NO_COLOR` (or `FORCE_COLOR` to force); Unicode
   additionally requires a real TTY, `TERM != dumb`, and no `SARIPATI_ASCII=1`. When off,
   everything collapses to clean 7-bit ASCII with no escape codes.
+- **Forcing the full UI.** `SARIPATI_UNICODE=1` (alias `SARIPATI_RICH=1`) forces both colour
+  and Unicode on. This exists because TTY detection fails in environments that are perfectly
+  capable of rendering the box — a host that pipes stdout (the Claude Code terminal), npx/npm
+  shims on Windows, some IDE consoles. Before it there was no way to request the rounded frame
+  at all: `unicode` keyed off `isTTY` alone, so those terminals were stuck with `+---+`
+  forever, and `FORCE_COLOR` produced a mongrel (amber escapes wrapped around ASCII corners).
+  It is opt-in, so pipes, CI logs, and the MCP stderr path keep the clean-ASCII default;
+  `SARIPATI_ASCII=1` and `TERM=dumb` remain hard opt-outs that beat it.
 - **Protocol safety.** The `◈ S A R I P A T I` wordmark and all diagnostics are rendered
   with `caps(process.stderr)` and written to **stderr only** on the `mcp` path — stdout stays
   pure JSON-RPC. This is the same discipline the embedder warmup already follows.

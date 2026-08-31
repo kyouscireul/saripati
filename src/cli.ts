@@ -23,8 +23,10 @@ const USAGE = `Usage:
   saripati help                          Show this help
 
 Environment:
-  SARIPATI_HOME   Data directory (default: ~/.saripati)
-  SARIPATI_DB     Vault database path (default: <SARIPATI_HOME>/vault.db)
+  SARIPATI_HOME     Data directory (default: ~/.saripati)
+  SARIPATI_DB       Vault database path (default: <SARIPATI_HOME>/vault.db)
+  SARIPATI_UNICODE  Force the full framed UI where TTY detection fails (=1)
+  SARIPATI_ASCII    Force plain 7-bit ASCII output (=1)
 `;
 
 /** Full help screen: the wordmark over usage. Rendered for stdout. */

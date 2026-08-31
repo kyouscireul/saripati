@@ -48,17 +48,38 @@ function noColor(): boolean {
   return "NO_COLOR" in process.env;
 }
 
-function forceColor(): boolean {
-  const v = process.env.FORCE_COLOR;
+function truthy(v: string | undefined): boolean {
   return v === "1" || v === "true";
+}
+
+function forceColor(): boolean {
+  return truthy(process.env.FORCE_COLOR);
+}
+
+/**
+ * Explicit request for the full presentation, for terminals where TTY detection
+ * fails but the terminal is perfectly capable — a piped-stdout host such as the
+ * Claude Code terminal, an npx/npm shim on Windows, some IDE consoles. Without
+ * this there is no way to ask for the rounded box: `unicode` used to depend on
+ * `isTTY` alone, so those environments were stuck with `+---+` forever, and
+ * FORCE_COLOR produced a mongrel (amber escapes around ASCII corners).
+ *
+ * Opt-in only, so the "piped output stays clean 7-bit ASCII" contract still
+ * holds by default for pipes, CI logs, and the MCP stderr path.
+ */
+function forceRich(): boolean {
+  return truthy(process.env.SARIPATI_UNICODE) || truthy(process.env.SARIPATI_RICH);
 }
 
 /** Capabilities for a given output stream. Piped / non-TTY → plain ASCII, no colour. */
 export function caps(stream: NodeJS.WriteStream = process.stdout): Caps {
   const tty = Boolean(stream.isTTY);
-  const color = forceColor() || (tty && !noColor());
-  // Unicode box-drawing only when we have a real TTY and no explicit opt-out.
-  const unicode = tty && process.env.SARIPATI_ASCII !== "1" && process.env.TERM !== "dumb";
+  const ascii = process.env.SARIPATI_ASCII === "1";
+  const dumb = process.env.TERM === "dumb";
+  // SARIPATI_ASCII=1 and TERM=dumb are hard opt-outs — they beat the force flags.
+  const rich = forceRich() && !ascii && !dumb;
+  const color = forceColor() || rich || (tty && !noColor());
+  const unicode = !ascii && !dumb && (rich || tty);
   return { color, unicode };
 }
 

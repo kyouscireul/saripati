@@ -237,6 +237,28 @@ Precedence: `--db` flag > `SARIPATI_DB` > `<SARIPATI_HOME>/vault.db` > `~/.sarip
 
 ---
 
+## Terminal Output
+
+SARIPATI renders a framed `◈ S A R I P A T I` wordmark, rounded status boxes and amber
+highlights — but only when it can prove the terminal will handle them. Colour needs a TTY and
+no `NO_COLOR`; the Unicode box-drawing needs a TTY, `TERM != dumb`, and no `SARIPATI_ASCII=1`.
+Otherwise everything degrades to clean 7-bit ASCII so a pipe or CI log never sees escape codes.
+
+Some terminals are perfectly capable but defeat that detection — anything that pipes stdout
+(the Claude Code terminal), npx/npm shims on Windows, certain IDE consoles. There you get
+`+---+` ASCII no matter how good the terminal is. Force the full UI:
+
+```bash
+SARIPATI_UNICODE=1 npx saripati help    # rounded box + colour, regardless of TTY detection
+SARIPATI_ASCII=1   npx saripati help    # the opposite — force plain ASCII
+```
+
+`SARIPATI_UNICODE` implies colour as well (`SARIPATI_RICH` is an alias). `SARIPATI_ASCII=1` and
+`TERM=dumb` are hard opt-outs and win over it. Export it in your shell profile if your terminal
+always needs it.
+
+---
+
 ## Backup
 
 The vault is a single SQLite file:
