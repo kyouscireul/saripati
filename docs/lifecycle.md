@@ -6,11 +6,13 @@
 flowchart TD
     A([User wants to install SARIPATI]) --> B{Distribution path}
 
-    B -->|Recommended| C["npx saripati setup ./setup.md"]
+    B -->|Recommended| C["Open ONBOARD.md in AI host\n(AI orchestrates setup conversationally)"]
+    B -->|Manual CLI| C2["npx saripati setup ./setup.md --write"]
     B -->|Claude Code CLI native| D["claude mcp add saripati -s user\n-- npx -y saripati mcp"]
     B -->|Manual JSON edit| E["Edit host mcpServers config directly"]
 
-    C --> G["setup command runs:\n1. resolvePaths() (--from override)\n2. openDb() — vault.db + migrations\n3. parse setup.md frontmatter → upsertIdentity\n4. Print config snippet + detected hosts"]
+    C --> C2
+    C2 --> G["setup command runs:\n1. resolvePaths() (--from override)\n2. openDb() — vault.db + migrations\n3. parse setup.md frontmatter → upsertIdentity\n4. Print config snippet + detected hosts"]
     G --> H{--write flag?}
     H -->|No| I["Prints snippet only\nUser edits host config manually"]
     H -->|Yes| J["mergeIntoHost() for each detected host:\n1. Read existing JSON (if any)\n2. Backup to .bak\n3. Merge mcpServers.saripati key\n4. Write back"]

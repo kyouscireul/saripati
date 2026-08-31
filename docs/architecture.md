@@ -137,7 +137,7 @@ writes the last fetch to a small JSON in the data dir, which the UI reads at `/a
 | Tool: project | `src/mcp/tools/project.ts` | `project_update` (JSON-patch merge), `project_list` |
 | Tool: status | `src/mcp/tools/status.ts` | `corpus` — counts, byKind, topTags, per-project `last_entry_at` |
 | Tool: identity | `src/mcp/tools/identity.ts` | `whoami` (getIdentity), `identity_set` (upsertIdentity, fields merge) |
-| Result helpers | `src/mcp/tools/_result.ts` | `jsonResult`, `textResult`, `deriveTitle`, `excerpt` |
+| Result helpers | `src/mcp/tools/_result.ts` | `jsonResult` (summary + JSON), `bannerResult` (wordmark + summary + JSON, used by `on`/`off`/`corpus`), `textResult`, `deriveTitle`, `excerpt` |
 | UI server | `src/ui/server.ts` | Node `http.createServer`; serves vendored ESM from `dist/vendor/` (dev falls back to node_modules); JSON API incl. `/api/last-fetch`; **read-only by default** — `--write` enables PATCH `/api/entry/:id` |
 | UI HTML | `src/ui/web.html` | Real HTML file — **Preact 10 + HTM** loaded via ESM at `/vendor/*.js`; `<script type="importmap">` resolves bare `"preact"` specifier for `hooks.module.js`; 2 themes (light default / dark, CSS vars, `localStorage`); 4 tabs (Entries · Graph · Tags · Identity); continuous-physics canvas force-graph with thermal noise; regex markdown renderer; SessionsPanel (last 5 sessions) beside entry detail; mini corpus stat footer in sidebar; `@project` click-to-filter. Built by `scripts/copy-ui.mjs`. |
 
