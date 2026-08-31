@@ -10,6 +10,7 @@ src/ui/web/dist/
 *.db-wal
 .saripati/
 data/
+!src/data/
 
 # Cached embedding models
 .cache/
