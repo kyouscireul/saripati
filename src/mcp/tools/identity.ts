@@ -16,15 +16,16 @@ export function registerIdentityTools(server: McpServer, db: DB): void {
       description:
         "Return the vault owner's identity: their profile/preferences and the configured AI " +
         "companion persona (if any). Use this to adopt the right voice and address the user " +
-        "correctly. If empty, suggest running `saripati onboard`.",
+        "correctly. If empty, open ONBOARD.md in your AI host to set up interactively, or " +
+        "set identity conversationally with the identity_set tool.",
       inputSchema: {},
     },
     async () => {
       const identity = getIdentity(db);
       if (!identity) {
         return textResult(
-          "No identity set yet. Ask the user to run `saripati onboard`, or set it " +
-            "conversationally with the identity_set tool.",
+          "No identity set yet. Ask the user to open ONBOARD.md in their AI host " +
+            "to run the guided setup, or set identity conversationally with the identity_set tool.",
         );
       }
       return jsonResult("Vault identity loaded.", identity);

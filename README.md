@@ -40,14 +40,19 @@ is a single SQLite file on your own machine.
 
 ## Install
 
+**Quickest path:** open [`ONBOARD.md`](./ONBOARD.md) in your AI host (Claude Code,
+Cursor, Windsurf, etc.) and say "set up saripati." The AI checks your environment,
+asks five identity questions, generates and runs the setup, and adds the system prompt
+— everything in one conversation, before MCP is running.
+
+Or go manual:
+
 ```bash
-npx saripati setup                 # create the vault, print the config, detect your host
-npx saripati setup ./setup.md      # also load your identity from a template file
-npx saripati setup ./setup.md --write   # also register SARIPATI with detected hosts
+npx saripati setup                          # create vault, print config + detected hosts
+npx saripati setup ./setup.md --write       # load identity from file + register with hosts
 ```
 
-Grab [`setup.md`](./setup.md) from this repo, fill in the four identity fields at the top,
-and point `setup` at it. Then your host connects by **package name** — no folder path:
+Either way, your host connects by **package name** — no folder path:
 
 ```json
 {
@@ -59,6 +64,8 @@ and point `setup` at it. Then your host connects by **package name** — no fold
 
 Restart your AI host. The first `vault` call downloads the ~90 MB embedding model once
 (with a progress heartbeat), then works offline forever.
+
+To remove SARIPATI later, open [`UNINSTALL.md`](./UNINSTALL.md) in your AI host.
 
 ---
 
@@ -99,7 +106,8 @@ Entries carry a **kind** and a **lifecycle**, so recall returns signal, not nois
 
 ## Identity — who the vault serves
 
-`setup` reads a small YAML frontmatter from `setup.md`:
+The ONBOARD.md flow collects your identity conversationally and generates a filled
+`setup.md`. You can also fill it manually:
 
 ```yaml
 ---
@@ -111,10 +119,11 @@ companion: librarian     # plain | librarian | research-assistant
 ---
 ```
 
-It is stored in a singleton `identity` row. From then on `on` and `whoami` hand your host
+Stored in a singleton `identity` row. From then on `on` and `whoami` hand your host
 that context at session start, so it adopts the right voice and addresses you correctly.
-Set a focus with `identity_set({ user_prefs: { focus: "project-name" } })` and `on` biases
-recent entries toward it.
+Update any time with `identity_set` (fields merge). Set a focus with
+`identity_set({ user_prefs: { focus: "project-name" } })` and `on` biases recent entries
+toward it.
 
 ---
 
