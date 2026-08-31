@@ -504,6 +504,9 @@ function Sidebar({ query, onQuery, kindFilter, onKind, statusFilter, onStatus, t
         ${status?.lastUpdated ? html`
           <span class="sf-dot"></span>
           <span>updated ${status.lastUpdated.slice(0,10)}</span>` : ''}
+        ${status?.version ? html`
+          <span class="sf-dot"></span>
+          <span title="running saripati version — if this lags the version you installed, hard-refresh (Ctrl+Shift+R)">v${status.version}</span>` : ''}
       </div>
     </div>`;
 }

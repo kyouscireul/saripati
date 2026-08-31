@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import type { DB } from "../db/db.js";
 import { openDb } from "../db/db.js";
 import { resolvePaths } from "../config.js";
+import { VERSION } from "../version.js";
 import {
   corpusStatus,
   listEntries,
@@ -190,12 +191,21 @@ async function handle(
 
   try {
     if (p === "/" || p === "/index.html") {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      // no-store, not merely no-cache: with no header at all the browser applies
+      // heuristic caching and keeps serving the old dashboard after the package
+      // is upgraded, which reads as "the UI didn't update".
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store, must-revalidate",
+      });
       return void res.end(readUi("web.html"));
     }
 
     if (VENDOR[p]) {
-      res.writeHead(200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "max-age=86400" });
+      // Vendored bundles sit at fixed paths, so a long max-age would serve a
+      // stale Preact for a day after an upgrade. Revalidate instead — these are
+      // local reads, so the cost is nil.
+      res.writeHead(200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-cache" });
       return void res.end(readFileSync(VENDOR[p], "utf8"));
     }
 
@@ -231,7 +241,7 @@ async function handle(
     }
 
     if (p === "/api/status")
-      return json(res, 200, { ...corpusStatus(db), timeline: timeline(db), sessions_recent: latestSessions(db, 5) });
+      return json(res, 200, { ...corpusStatus(db), version: VERSION, timeline: timeline(db), sessions_recent: latestSessions(db, 5) });
 
     if (p === "/api/identity") return json(res, 200, getIdentity(db));
 

@@ -50,7 +50,11 @@ Or go manual:
 ```bash
 npx saripati setup                          # create vault, print config + detected hosts
 npx saripati setup ./setup.md --write       # load identity from file + register with hosts
+npx saripati version                        # what version is actually running here
 ```
+
+Upgrading on a machine that already has it? npx caches by package spec, so pin explicitly —
+`npx saripati@latest ui` — and restart your MCP host. See [Troubleshooting](docs/guide.md#troubleshooting).
 
 Either way, your host connects by **package name** — no folder path:
 

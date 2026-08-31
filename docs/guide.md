@@ -283,3 +283,19 @@ Subsequent calls are fast.
 
 **"saripati not found" in host** — run `npx -y saripati help` once to prime the npx cache, then
 restart the host.
+
+**Upgraded, but still running the old version** — npx caches by package spec and will happily
+reuse a stale copy, so `npx saripati` alone does not guarantee the newest release. Check what
+you actually have, then force the upgrade:
+
+```bash
+npx saripati version           # what's running right now
+npx saripati@latest ui         # pin explicitly rather than trusting the bare name
+rm -rf ~/.npm/_npx             # last resort: clear the npx cache
+npm i -g saripati@latest       # if you installed it globally
+```
+
+The same applies to the MCP registration: `npx -y saripati mcp` only auto-confirms the install,
+it does not force the latest version — so a stale UI usually means a stale MCP server too.
+Restart the host after upgrading. The dashboard footer shows the running version; if it lags
+what you installed, hard-refresh the browser (Ctrl+Shift+R).

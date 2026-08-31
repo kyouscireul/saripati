@@ -5,6 +5,7 @@
  *   saripati setup [setup.md]     Create the vault + identity, print host MCP config.
  *   saripati mcp   [--db <path>]  Run the MCP server over stdio (host connects here).
  *   saripati ui    [--port <n>]   Launch the local dashboard.
+ *   saripati version              Print the running version.
  *   saripati help                 Show this help.
  *
  * Subcommands are imported lazily so that `mcp` (the hot path) pays no cost for
@@ -12,11 +13,13 @@
  */
 
 import { banner, caps } from "./term/theme.js";
+import { VERSION } from "./version.js";
 
 const USAGE = `Usage:
   saripati setup   [setup.md] [--write]  Create the vault + identity, print the host config
   saripati mcp     [--db <path>]         Start the MCP server (stdio) — hosts connect here
   saripati ui      [--port <n>]          Open the dashboard to browse the corpus
+  saripati version                       Print the running version
   saripati help                          Show this help
 
 Environment:
@@ -26,7 +29,7 @@ Environment:
 
 /** Full help screen: the wordmark over usage. Rendered for stdout. */
 function helpScreen(): string {
-  return `${banner(undefined, caps(process.stdout))}\n\n${USAGE}`;
+  return `${banner(undefined, caps(process.stdout))}\n\nsaripati v${VERSION}\n\n${USAGE}`;
 }
 
 async function main(): Promise<void> {
@@ -48,6 +51,13 @@ async function main(): Promise<void> {
       await runUi(rest);
       break;
     }
+    // Bare version output — the one command you want when asking "did my
+    // install on this machine actually update?"
+    case "version":
+    case "--version":
+    case "-v":
+      process.stdout.write(`${VERSION}\n`);
+      break;
     case "help":
     case "--help":
     case "-h":
