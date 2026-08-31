@@ -10,7 +10,7 @@
   --bg:#F5F4EF; --sf:#EDECEA; --sf2:#E6E5E0; --sf3:#DDDCD8;
   --ln:rgba(0,0,0,0.08); --ln2:rgba(0,0,0,0.05);
   --tx:#1A1A1A; --dm:#6A6A6A; --mt:#9A9A9A;
-  --am:#D97800; --gd:#B86800; --gn:#2A8A2A; --er:#CC2222;
+  --am:#D97800; --gd:#B86800; --gn:#2A8A2A; --er:#CC2222; --rel:#C2185B;
   --am10:rgba(217,120,0,0.10); --am25:rgba(217,120,0,0.25);
   --gn10:rgba(42,138,42,0.10); --gn25:rgba(42,138,42,0.25);
   --sel:rgba(217,120,0,0.08);
@@ -20,7 +20,7 @@
   --bg:#0F0F0F; --sf:#141414; --sf2:#131313; --sf3:#1A1A1A;
   --ln:rgba(255,255,255,0.08); --ln2:rgba(255,255,255,0.05);
   --tx:#E8E8E3; --dm:#8A8A8A; --mt:#5A5A5A;
-  --am:#FF9E00; --gd:#FFD700; --gn:#87D787; --er:#FF5F5F;
+  --am:#FF9E00; --gd:#FFD700; --gn:#87D787; --er:#FF5F5F; --rel:#FF6FA5;
   --am10:rgba(255,158,0,0.10); --am25:rgba(255,158,0,0.25);
   --gn10:rgba(135,215,135,0.10); --gn25:rgba(135,215,135,0.25);
   --sel:rgba(255,158,0,0.07);
@@ -172,7 +172,14 @@ a{color:var(--am)}
 /* ── Graph ───────────────────────────────────────────── */
 .graph-wrap{flex:1;min-height:0;position:relative;width:100%;height:100%;overflow:hidden}
 .graph-canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
-.graph-legend{position:absolute;top:16px;left:16px;background:var(--sf);border:1px solid var(--ln);border-radius:4px;padding:10px 12px;font-size:11px;color:var(--dm);transition:all .2s;z-index:2}
+.graph-toolbar{position:absolute;top:16px;left:16px;display:flex;align-items:center;gap:8px;z-index:3}
+.graph-search{background:var(--sf);border:1px solid var(--ln);color:var(--tx);padding:5px 10px;border-radius:3px;font-size:12px;outline:none;width:200px}
+.graph-search:focus{border-color:var(--am)}
+.graph-search::placeholder{color:var(--mt)}
+.graph-search-count{font-size:11px;color:var(--mt);flex-shrink:0}
+.graph-pills{display:flex;gap:6px}
+/* legend sits below the toolbar, which owns top:16px on the left */
+.graph-legend{position:absolute;top:56px;left:16px;background:var(--sf);border:1px solid var(--ln);border-radius:4px;padding:10px 12px;font-size:11px;color:var(--dm);transition:all .2s;z-index:2}
 .graph-legend.collapsed{padding:6px 10px;cursor:pointer}
 .graph-legend.collapsed:hover{border-color:var(--am25);color:var(--am)}
 .legend-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;font-size:10px;letter-spacing:0.5px;color:var(--mt);text-transform:uppercase}
@@ -341,10 +348,15 @@ function mdRender(raw) {
 }
 
 // ── Graph physics ────────────────────────────────────────
+// Canvas palette. Node keys mirror the --kr/--kn/--kd/--kp/--kq/--km/--ki CSS vars
+// (kindColor()) so a kind reads the same on the canvas as it does in the DOM.
+// `relation` is magenta — the one hue no node kind uses, so an author-asserted
+// edge can never be mistaken for a memo node's purple.
 const GRAPH_COLORS = {
-  light: { bg:'#F5F4EF', nodes:{research:'#D97800',note:'#888888',decision:'#2A8A2A',pattern:'#B86800'}, edges:{wikilink:'#D97800',project:'#2A8A2A',tag:'rgba(0,0,0,0.12)'}, label:'#1A1A1A', ring:'rgba(0,0,0,0.2)' },
-  dark:  { bg:'#0F0F0F', nodes:{research:'#FF9E00',note:'#6A6A6A',decision:'#87D787',pattern:'#FFD700'}, edges:{wikilink:'#FF9E00',project:'#87D787',tag:'rgba(255,255,255,0.15)'}, label:'#E8E8E3', ring:'rgba(255,255,255,0.2)' },
+  light: { bg:'#F5F4EF', nodes:{research:'#D97800',note:'#888888',decision:'#2A8A2A',pattern:'#B86800',question:'#3A6EA5',memo:'#8A5CD9',intention:'#1F8A8A'}, edges:{relation:'#C2185B',wikilink:'#D97800',project:'#2A8A2A',tag:'rgba(0,0,0,0.12)'}, label:'#1A1A1A', ring:'rgba(0,0,0,0.2)', pin:'#D97800' },
+  dark:  { bg:'#0F0F0F', nodes:{research:'#FF9E00',note:'#6A6A6A',decision:'#87D787',pattern:'#FFD700',question:'#6AA3E0',memo:'#B08CF0',intention:'#6AD0D0'}, edges:{relation:'#FF6FA5',wikilink:'#FF9E00',project:'#87D787',tag:'rgba(255,255,255,0.15)'}, label:'#E8E8E3', ring:'rgba(255,255,255,0.2)', pin:'#FF9E00' },
 };
+const EDGE_TYPES = ['relation', 'wikilink', 'project', 'tag'];
 
 // ── Pill component ───────────────────────────────────────
 function Pill({ label, active, onClick }) {
@@ -820,8 +832,17 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const [legendOpen, setLegendOpen] = useState(true);
+  const [search, setSearch] = useState('');
+  const [matchCount, setMatchCount] = useState(0);
+  const [edgeFilter, setEdgeFilter] = useState({ relation:true, wikilink:true, project:true, tag:true });
+  const [pinCount, setPinCount] = useState(0);
+  const searchRef = useRef(null);
+  // initGraph is a useCallback and must not re-run when a filter toggles, so it
+  // reads the live filter through a ref rather than taking it as a dependency.
+  const edgeFilterRef = useRef(edgeFilter);
   const G = useRef({ nodes:[], edges:[], raf:null, dragging:null, dragStart:null, hovered:null, ctx:null,
-    scale:1, panX:0, panY:0, panning:false, panStart:null, _frame:0, _userViewport:false });
+    scale:1, panX:0, panY:0, panning:false, panStart:null, _frame:0, _userViewport:false,
+    search:'', edgeFilter:null, suppressClick:false, wasPinned:false });
 
   const initGraph = useCallback((canvas, data) => {
     const W = canvas.width;
@@ -834,16 +855,32 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
     G.current.nodes = (data.nodes || []).slice(0, 150).map((n, i, arr) => {
       const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
       const r = Math.min(W, H) * 0.38;
-      return { id: n.id, title: n.title, kind: n.kind,
+      const tags = n.tags || [];
+      return { id: n.id, title: n.title, kind: n.kind, project: n.project ?? null, tags,
+        // Precomputed search haystack. Deliberately excludes `description` — it's
+        // a 200-char body excerpt, so including it makes most queries match most nodes.
+        hay: `${n.title} ${n.kind} ${n.project || ''} ${tags.join(' ')}`.toLowerCase(),
         x: W/2 + Math.cos(angle)*r, y: H/2 + Math.sin(angle)*r,
-        vx:0, vy:0, pinned:false };
+        vx:0, vy:0, pinned:false, deg:0, r:6, _match:false };
     });
     G.current.nodeMap = new Map(G.current.nodes.map(n => [n.id, n]));
     G.current.edges = (data.edges || []).slice(0, 600);
+    G.current.edgeFilter = edgeFilterRef.current;
+    computeDegrees(G.current);
     G.current.dragging = null; G.current.dragStart = null;
     G.current.scale = 1; G.current.panX = 0; G.current.panY = 0;
     G.current.panning = false; G.current.panStart = null;
     G.current._frame = 0;
+
+    // Restore persisted pins BEFORE the pre-warm so they anchor the layout
+    // instead of being dragged around by it. Re-saving prunes ids that no
+    // longer exist (deleted entries, or a different vault).
+    for (const p of loadPins()) {
+      const n = G.current.nodeMap.get(p.id);
+      if (n) { n.x = p.x; n.y = p.y; n.pinned = true; }
+    }
+    savePins(G.current.nodes);
+    setPinCount(G.current.nodes.filter(n => n.pinned).length);
 
     // Pre-warm without noise so nodes partially spread before the first visible frame.
     for (let t = 0; t < 80; t++) physicsStep(canvas, G.current, false);
@@ -886,16 +923,73 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
     if (G.current.ctx) drawGraph(canvasRef.current, G.current, selectedId);
   }, [selectedId, theme]);
 
+  // Search: stamp matches onto the nodes once per change, so drawGraph stays a
+  // pure reader at 60fps. G is a ref, so the explicit repaint is mandatory —
+  // setState alone paints nothing.
+  useEffect(() => {
+    const term = search.trim().toLowerCase();
+    G.current.search = term;
+    let n = 0;
+    for (const nd of G.current.nodes) {
+      nd._match = term ? nd.hay.includes(term) : false;
+      if (nd._match) n++;
+    }
+    setMatchCount(n);
+    if (G.current.ctx) drawGraph(canvasRef.current, G.current, selectedId);
+  }, [search, selectedId]);
+
+  // Edge filter changes the forces (hidden edges leave the simulation too), so
+  // this recomputes degrees and restarts the physics rather than just redrawing.
+  useEffect(() => {
+    edgeFilterRef.current = edgeFilter;
+    G.current.edgeFilter = edgeFilter;
+    if (!G.current.ctx || !G.current.nodes.length) return;
+    computeDegrees(G.current);
+    restartTick(canvasRef.current, G.current, selectedId);
+  }, [edgeFilter]);
+
+  // '/' to focus, Escape to clear — registered only while the graph tab is up.
+  // The Sidebar's global '/' handler also fires, but it focuses an input inside
+  // a display:none panel, which is a silent no-op. Don't "fix" one without the other.
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === 'Escape' && document.activeElement === searchRef.current) {
+        setSearch('');
+        searchRef.current.blur();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active]);
+
+  const syncPins = () => {
+    savePins(G.current.nodes);
+    setPinCount(G.current.nodes.filter(n => n.pinned).length);
+  };
+
+  const unpinAll = () => {
+    G.current.nodes.forEach(n => { n.pinned = false; });
+    syncPins();
+    restartTick(canvasRef.current, G.current, selectedId);
+  };
+
   const resetGraph = () => {
     if (!canvasRef.current || !G.current.nodes.length) return;
     const canvas = canvasRef.current;
     const W = canvas.width || 800;
     const H = canvas.height || 600;
     G.current.nodes.forEach((n, i, arr) => {
+      // Pinned nodes hold their position through a reset — that's the point of a pin.
+      if (n.pinned) { n.vx = 0; n.vy = 0; return; }
       const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
       n.x = W/2 + Math.cos(angle) * Math.min(W,H) * 0.38;
       n.y = H/2 + Math.sin(angle) * Math.min(W,H) * 0.38;
-      n.vx = 0; n.vy = 0; n.pinned = false;
+      n.vx = 0; n.vy = 0;
     });
     G.current.scale = 1; G.current.panX = 0; G.current.panY = 0;
     G.current._frame = 0; G.current._userViewport = false;
@@ -921,6 +1015,18 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
     const pos = toWorld(sx, sy);
     const hit = hitNode(pos, G.current.nodes);
     if (hit) {
+      // Shift-click toggles the pin. Handled here rather than as a dblclick
+      // because dblclick lands after two full down/up pairs — the click path
+      // would already have fired onSelect and switched tabs.
+      if (e.shiftKey) {
+        hit.pinned = !hit.pinned;
+        hit.vx = 0; hit.vy = 0;
+        syncPins();
+        G.current.suppressClick = true;
+        restartTick(canvasRef.current, G.current, selectedId);
+        return;
+      }
+      G.current.wasPinned = hit.pinned; // restored on a click, kept on a drag
       hit.pinned = true;
       G.current.dragging = hit;
       G.current.dragStart = { x: pos.x, y: pos.y };
@@ -955,6 +1061,11 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
     if (G.current.panning) {
       G.current.panning = false; G.current.panStart = null; return;
     }
+    if (G.current.suppressClick) {
+      G.current.suppressClick = false;
+      G.current.dragging = null; G.current.dragStart = null;
+      return;
+    }
     if (!G.current.dragging) return;
     const { sx, sy } = screenCoords(e);
     const pos = toWorld(sx, sy);
@@ -962,9 +1073,13 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
     const sc = G.current.scale || 1;
     const dist = Math.sqrt((pos.x - start.x)**2 + (pos.y - start.y)**2) * sc;
     const id = G.current.dragging.id;
-    G.current.dragging.pinned = false;
+    // A real drag leaves the node pinned where it was dropped. A click restores
+    // whatever the pin state was before mousedown pinned it unconditionally —
+    // without this, merely clicking a node would pin it forever.
+    if (dist < 8) G.current.dragging.pinned = G.current.wasPinned;
     G.current.dragging = null;
     G.current.dragStart = null;
+    syncPins();
     if (dist < 8) onSelect(id);
   }, [onSelect]);
 
@@ -992,7 +1107,18 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
         <canvas class="graph-canvas" ref=${canvasRef}
           onMouseDown=${onMouseDown} onMouseMove=${onMouseMove} onMouseUp=${onMouseUp}
           onWheel=${onWheel}
-          onMouseLeave=${() => { G.current.hovered = null; G.current.dragging = null; G.current.panning = false; }}/>
+          onMouseLeave=${() => { G.current.hovered = null; G.current.dragging = null; G.current.panning = false; syncPins(); }}/>
+      </div>
+
+      <div class="graph-toolbar">
+        <input ref=${searchRef} class="graph-search" type="text" placeholder="search graph…"
+          value=${search} onInput=${e => setSearch(e.target.value)} autocomplete="off"/>
+        ${search && html`<span class="graph-search-count">${matchCount} / ${G.current.nodes.length}</span>`}
+        <div class="graph-pills">
+          ${EDGE_TYPES.map(t => html`
+            <${Pill} key=${t} label=${t} active=${edgeFilter[t]}
+              onClick=${() => setEdgeFilter(f => ({ ...f, [t]: !f[t] }))}/>`)}
+        </div>
       </div>
 
       <div class=${`graph-legend${legendOpen ? '' : ' collapsed'}`} onClick=${() => !legendOpen && setLegendOpen(true)}>
@@ -1005,6 +1131,7 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
         ${legendOpen && html`
           <Fragment>
             <div class="legend-sec">EDGES</div>
+            <div class="legend-row"><span class="legend-edge" style="background:var(--rel)"></span>relation</div>
             <div class="legend-row"><span class="legend-edge" style="background:var(--am)"></span>wikilink</div>
             <div class="legend-row"><span class="legend-edge" style="background:var(--gn)"></span>project</div>
             <div class="legend-row"><span class="legend-edge" style="background:rgba(128,128,128,0.5)"></span>tag</div>
@@ -1022,9 +1149,10 @@ function GraphPanel({ active, theme, selectedId, onSelect }) {
       <div class="graph-controls">
         <button class="graph-reset" onClick=${() => zoomStep(1.25)}>+</button>
         <button class="graph-reset" onClick=${() => zoomStep(1/1.25)}>−</button>
+        ${pinCount > 0 && html`<button class="graph-reset" onClick=${unpinAll}>unpin ${pinCount}</button>`}
         <button class="graph-reset" onClick=${resetGraph}>reset</button>
       </div>
-      <div class="graph-hint">drag node · drag canvas to pan · scroll to zoom · click node to inspect</div>
+      <div class="graph-hint">drag to pin · shift-click to pin/unpin · drag canvas to pan · scroll to zoom · click to inspect</div>
     </div>`;
 }
 
@@ -1036,13 +1164,56 @@ function canvasPos(e, canvas) {
 function hitNode(pos, nodes) {
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
-    if ((pos.x-n.x)**2 + (pos.y-n.y)**2 < 144) return n;
+    // Radius-aware so degree-sized hubs stay grabbable. A default r=6 node keeps
+    // the historic 12px reach (12² = 144).
+    const rr = (n.r || 6) + 6;
+    if ((pos.x-n.x)**2 + (pos.y-n.y)**2 < rr*rr) return n;
   }
   return null;
 }
 
+// ── Graph pins ───────────────────────────────────────────
+// A pin is a user assertion, so it outlives reset, refetch and reload. Position
+// rides along — a pin whose node springs back to a fresh layout is not a pin.
+const PIN_KEY = 'saripati-graph-pins';
+function loadPins() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PIN_KEY) || '[]');
+    return Array.isArray(v) ? v.filter(p => p && typeof p.id === 'number') : [];
+  } catch { return []; }
+}
+function savePins(nodes) {
+  try {
+    localStorage.setItem(PIN_KEY, JSON.stringify(
+      nodes.filter(n => n.pinned).map(n => ({ id: n.id, x: n.x, y: n.y }))));
+  } catch { /* private mode / quota — pins simply don't persist */ }
+}
+
+// Node radius from degree, counting DISTINCT visible neighbours: a pair can
+// legitimately yield two edges of different types, but that's one connection.
+// sqrt, not log — log flattens so early a 2-edge node reads like a 12-edge one.
+function computeDegrees(G) {
+  const seen = new Set();
+  const deg = new Map();
+  for (const e of G.edges) {
+    if (G.edgeFilter && G.edgeFilter[e.type] === false) continue;
+    if (!G.nodeMap.get(e.from) || !G.nodeMap.get(e.to)) continue; // endpoint beyond NODE_CAP
+    const k = e.from < e.to ? `${e.from}:${e.to}` : `${e.to}:${e.from}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deg.set(e.from, (deg.get(e.from) || 0) + 1);
+    deg.set(e.to, (deg.get(e.to) || 0) + 1);
+  }
+  for (const n of G.nodes) {
+    n.deg = deg.get(n.id) || 0;
+    n.r = Math.min(16, 5 + 2.2 * Math.sqrt(n.deg));
+  }
+}
+
 // Pure physics step — no drawing, no settled state.
 // Nodes are unclamped and live in world space; fitToView() adapts the viewport.
+// Returns the average speed (px/frame) across unpinned nodes, used by tick()
+// to detect real convergence instead of stopping after a fixed frame count.
 function physicsStep(canvas, G, noisy) {
   const REP=2800, SPR=0.012, DAMP=0.86, REST=160, GRAV=0.0008;
   const NOISE = noisy ? 0.14 : 0;
@@ -1050,6 +1221,9 @@ function physicsStep(canvas, G, noisy) {
   const nodeById = id => G.nodeMap?.get(id);
 
   for (const e of G.edges) {
+    // Hidden edge types leave the simulation too — keeping a spring whose line
+    // is hidden makes nodes cling for reasons the viewer can no longer see.
+    if (G.edgeFilter && G.edgeFilter[e.type] === false) continue;
     const s = nodeById(e.from), t = nodeById(e.to);
     if (!s || !t) continue;
     const dx = t.x-s.x, dy = t.y-s.y, d = Math.sqrt(dx*dx+dy*dy)||1;
@@ -1058,6 +1232,7 @@ function physicsStep(canvas, G, noisy) {
     if (!t.pinned) { t.vx -= fx; t.vy -= fy; }
   }
 
+  let totalSpeed = 0, moving = 0;
   for (let i = 0; i < G.nodes.length; i++) {
     const n = G.nodes[i];
     if (n.pinned) continue;
@@ -1075,7 +1250,10 @@ function physicsStep(canvas, G, noisy) {
     // Unclamped — nodes spread freely; zoom/pan + fitToView handle navigation.
     n.x += n.vx;
     n.y += n.vy;
+    totalSpeed += Math.hypot(n.vx, n.vy);
+    moving++;
   }
+  return moving > 0 ? totalSpeed / moving : 0;
 }
 
 // Zoom/pan so all nodes are visible with padding.
@@ -1094,14 +1272,33 @@ function fitToView(canvas, G) {
   G.panY = (H - ph * sc) / 2 - minY * sc;
 }
 
-// Layout phase (noisy) then drain phase, hard-stop at frame 450.
-// fitToView() fires once on initial load/reset; skipped if user has already
-// panned or zoomed (_userViewport flag).
+const NOISE_FRAMES = 150;          // seeded/jitter phase length, unchanged from prior cutoff
+const SETTLE_SPEED = 0.05;         // px/frame avg speed considered "at rest"
+const SETTLE_STREAK_NEEDED = 30;   // ~0.5s @ 60fps of sustained low speed before declaring convergence
+const MAX_FRAMES = 1200;           // ~20s @ 60fps hard safety ceiling — non-convergence guarantee only
+
+// Layout phase (noisy) then drain phase, stopping once the layout actually
+// settles (or at MAX_FRAMES as a safety net for pathological non-convergence).
+// fitToView() fires once on real settle; skipped if user has already panned
+// or zoomed (_userViewport flag).
 function tick(canvas, G, selectedId) {
   G._frame = (G._frame || 0) + 1;
-  physicsStep(canvas, G, G._frame < 150);
+  const noisy = G._frame < NOISE_FRAMES;
+  const avgSpeed = physicsStep(canvas, G, noisy);
   drawGraph(canvas, G, selectedId);
-  if (G._frame >= 450) {
+
+  if (noisy) {
+    G._settleStreak = 0; // never count settled frames during the seeded/noisy phase
+  } else if (avgSpeed < SETTLE_SPEED) {
+    G._settleStreak = (G._settleStreak || 0) + 1;
+  } else {
+    G._settleStreak = 0;
+  }
+
+  const converged = G._settleStreak >= SETTLE_STREAK_NEEDED;
+  const timedOut = G._frame >= MAX_FRAMES;
+
+  if (converged || timedOut) {
     if (!G._userViewport) {
       fitToView(canvas, G);
       drawGraph(canvas, G, selectedId);
@@ -1115,6 +1312,7 @@ function tick(canvas, G, selectedId) {
 function restartTick(canvas, G, selectedId) {
   if (G.raf) return;
   G._frame = 0;
+  G._settleStreak = 0;
   tick(canvas, G, selectedId);
 }
 
@@ -1140,22 +1338,39 @@ function drawGraph(canvas, G, selectedId) {
   ctx.save();
   ctx.setTransform(sc, 0, 0, sc, px, py);
 
+  // A search dims everything that doesn't match, rather than filtering nodes
+  // out — the layout itself is the context, so it must not rearrange.
+  const dim = !!G.search;
+
   for (const e of G.edges) {
+    if (G.edgeFilter && G.edgeFilter[e.type] === false) continue;
     const s = nodeById(e.from), t = nodeById(e.to);
     if (!s || !t) continue;
     ctx.strokeStyle = col.edges[e.type] || col.edges.tag;
-    ctx.lineWidth = e.type === 'wikilink' ? 1.5 : 1;
-    ctx.globalAlpha = e.type === 'wikilink' ? 0.75 : 0.4;
+    ctx.lineWidth = e.type === 'relation' ? 2 : e.type === 'wikilink' ? 1.5 : 1;
+    let a = e.type === 'relation' ? 0.85 : e.type === 'wikilink' ? 0.75 : 0.4;
+    if (dim && !(s._match || t._match)) a *= 0.25;
+    ctx.globalAlpha = a;
     ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
   }
   ctx.globalAlpha = 1;
 
   for (const n of G.nodes) {
     const isSel = n.id === selectedId;
-    const r = isSel ? 9 : 6;
+    const base = n.r || 6;
+    const r = isSel ? base + 3 : base;
     const hov = G.hovered?.id === n.id;
+    ctx.globalAlpha = (dim && !n._match) ? 0.15 : 1;
     ctx.fillStyle = col.nodes[n.kind] || '#888';
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI*2); ctx.fill();
+    if (n.pinned) {
+      ctx.strokeStyle = col.pin; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(n.x, n.y, base+2.5, 0, Math.PI*2); ctx.stroke();
+    }
+    if (dim && n._match) {
+      ctx.strokeStyle = col.pin; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(n.x, n.y, base+5, 0, Math.PI*2); ctx.stroke();
+    }
     if (hov || isSel) {
       ctx.strokeStyle = col.ring; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(n.x, n.y, r+3, 0, Math.PI*2); ctx.stroke();
@@ -1168,6 +1383,7 @@ function drawGraph(canvas, G, selectedId) {
       ctx.fillStyle = col.label;
       ctx.fillText(lbl, n.x+16, n.y+3);
     }
+    ctx.globalAlpha = 1;
   }
   ctx.restore();
 }

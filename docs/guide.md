@@ -150,6 +150,11 @@ Metadata-only (never edits the body, never re-embeds). Use it to close the confl
 | `resolved` / `active` | Answer a question / close an intention |
 | `links` | Explicit typed links: `{ id, rel }` where rel ∈ `because-of·supersedes·related·contradicts` |
 
+Typed links are the right way to say "these two entries are connected." They render in the
+graph as their own edge type, outranking the incidental shared-project and shared-tag edges,
+and they count as explicit references in `/api/backlinks`. Tags are a retrieval facet — reach
+for `links` rather than tagging two entries alike to associate them.
+
 ### `corpus`  — what already exists
 
 Counts, breakdown by kind, top tags, per-project `last_entry_at`, and session count. Call it
@@ -193,7 +198,8 @@ npx saripati ui --no-open        # don't auto-open the browser
 Built on **Preact 10 + HTM** — no CDN, no bundler; the ESM bundles are vendored into the
 package and served at `/vendor/*.js`. Tabs: **Entries** (hybrid search, kind chips,
 `@project`/tag filters, entry detail with sources + backlinks and a lifecycle-status badge),
-**Graph** (physics force-graph over derived links — wikilink/project/tag edges), **Tags**,
+**Graph** (physics force-graph over derived links — relation/wikilink/project/tag edges, each
+toggleable; node size by connection count; `/` to search; drag or shift-click to pin), **Tags**,
 **Identity** (profile · companion · session history). A `/api/last-fetch` endpoint exposes
 the agent's most recent recall for observability.
 

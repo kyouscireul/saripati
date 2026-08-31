@@ -252,22 +252,61 @@ async function handle(
       for (const n of ctx.nodes) for (const t of n.tags) tagFreq.set(t, (tagFreq.get(t) ?? 0) + 1);
       const rareThreshold = Math.ceil(Math.min(ctx.nodes.length, NODE_CAP) * 0.25);
 
+      // A tag can be rare corpus-wide yet saturate one small project (e.g. every
+      // entry in an 8-entry project tagged "internship") — that still forms a
+      // local hairball even though the vault-wide check above passes. Scope a
+      // second rarity check to same-project pairs so a tag must be rare both
+      // vault-wide AND within the shared project to keep a "tag" edge.
+      const projectTagFreq = new Map<string, Map<string, number>>();
+      const projectNodeCount = new Map<string, number>();
+      for (const n of ctx.nodes) {
+        if (!n.project) continue;
+        projectNodeCount.set(n.project, (projectNodeCount.get(n.project) ?? 0) + 1);
+        let freq = projectTagFreq.get(n.project);
+        if (!freq) projectTagFreq.set(n.project, (freq = new Map()));
+        for (const t of n.tags) freq.set(t, (freq.get(t) ?? 0) + 1);
+      }
+      const projectRareThreshold = (project: string) =>
+        Math.ceil((projectNodeCount.get(project) ?? 0) * 0.25);
+
       const bodies = new Map(allEntries(db).map((e) => [e.id, e.body]));
-      const seen = new Set<string>();
-      const edges: { from: number; to: number; type: string }[] = [];
+      const edgeOrd: Record<string, number> = { relation: 0, wikilink: 1, project: 2, tag: 3 };
+      const byPair = new Map<string, { from: number; to: number; type: string; rel?: string }>();
       for (const node of ctx.nodes.slice(0, NODE_CAP)) {
         for (const link of deriveLinks(ctx, node, bodies.get(node.id) ?? "")) {
           if (link.type === "tag") {
-            // Only keep tag edges where the two nodes share at least one rare tag.
-            const hasRare = node.tags.some(
-              (t) => link.to.tags.includes(t) && (tagFreq.get(t) ?? 0) <= rareThreshold,
-            );
+            // Only keep tag edges where the two nodes share at least one tag
+            // that's rare vault-wide, and (if they're in the same project)
+            // also rare within that project.
+            const sameProject = node.project && link.to.project && node.project === link.to.project;
+            const hasRare = node.tags.some((t) => {
+              if (!link.to.tags.includes(t)) return false;
+              if ((tagFreq.get(t) ?? 0) > rareThreshold) return false;
+              if (!sameProject) return true;
+              const projFreq = projectTagFreq.get(node.project!)?.get(t) ?? 0;
+              return projFreq <= projectRareThreshold(node.project!);
+            });
             if (!hasRare) continue;
           }
-          const key = `${Math.min(node.id, link.to.id)}:${Math.max(node.id, link.to.id)}:${link.type}`;
-          if (!seen.has(key)) { seen.add(key); edges.push({ from: node.id, to: link.to.id, type: link.type }); }
+          // Strongest type wins per PAIR, not just per derivation. deriveLinks
+          // already absorbs weaker types within one node's own edges, but the
+          // other endpoint derives independently — so A→B "project" and
+          // B→A "relation" both arrive, and the pair would draw twice with the
+          // weaker line painting over the stronger one.
+          const key = `${Math.min(node.id, link.to.id)}:${Math.max(node.id, link.to.id)}`;
+          const prev = byPair.get(key);
+          if (!prev || edgeOrd[link.type] < edgeOrd[prev.type]) {
+            byPair.set(key, { from: node.id, to: link.to.id, type: link.type, rel: link.rel });
+          }
         }
       }
+      // Edges accumulate in ascending node-id order, so a large vault can spend
+      // the whole 600 budget on old entries' tag edges before reaching a single
+      // author-asserted relation. Sort by rank so the cap drops the least
+      // meaningful edges first.
+      const edges = [...byPair.values()].sort(
+        (a, b) => (edgeOrd[a.type] ?? 9) - (edgeOrd[b.type] ?? 9),
+      );
       return json(res, 200, { nodes: ctx.nodes.slice(0, NODE_CAP), edges: edges.slice(0, 600) });
     }
 
@@ -278,8 +317,13 @@ async function handle(
       const bodies = new Map(allEntries(db).map((e) => [e.id, e.body]));
       return json(res, 200, ctx.nodes.filter((node) => {
         if (node.id === targetId) return false;
+        // Explicit references only — wikilinks and author-asserted typed
+        // relations. Must include "relation": deriveLinks keeps the strongest
+        // type per target, so an entry that both wikilinks and typed-links the
+        // same target reports "relation", and a wikilink-only filter would
+        // silently drop that backlink.
         return deriveLinks(ctx, node, bodies.get(node.id) ?? "").some(
-          (l) => l.to.id === targetId && l.type === "wikilink",
+          (l) => l.to.id === targetId && (l.type === "wikilink" || l.type === "relation"),
         );
       }));
     }

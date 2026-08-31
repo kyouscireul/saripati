@@ -124,7 +124,7 @@ writes the last fetch to a small JSON in the data dir, which the UI reads at `/a
 | Migrations | `src/db/migrations.ts` | `PRAGMA user_version` runner; migration 2 rebuilds `entries` to widen `kind` + add lifecycle columns |
 | Schema | `src/db/schema.ts` | Embedded baseline `SCHEMA_SQL` string; defines `EMBEDDING_DIM = 384` |
 | Queries | `src/db/queries/*.ts` | Domain modules (entries, search, sessions, projects, identity, corpus) re-exported by `queries.ts`; atomic tri-table tx; nudge helpers (`unresolvedQuestions`, `activeIntentions`, `unreadMemos`, `lastEntryAtByProject`) |
-| Link graph | `src/graph/links.ts` | `buildLinkContext`, `deriveLinks` (canonical edge rule) — powers the UI graph |
+| Link graph | `src/graph/links.ts` | `buildLinkContext`, `deriveLinks` (canonical edge rule: `relation > wikilink > project > tag`) — powers the UI graph |
 | Retrieval trace | `src/trace.ts` | `writeLastFetch` / `readLastFetch` — cross-process record of the last recall |
 | Embedder | `src/embed/embedder.ts` | Singleton pipeline: `Xenova/all-MiniLM-L6-v2`, mean-pool + L2-normalize → 384-dim float[] |
 | Hybrid search | `src/search/hybrid.ts` | RRF fusion of vec KNN + FTS5 BM25 (`RRF_K = 60`), per-kind boost, superseded/archived exclusion |
@@ -139,7 +139,7 @@ writes the last fetch to a small JSON in the data dir, which the UI reads at `/a
 | Tool: identity | `src/mcp/tools/identity.ts` | `whoami` (getIdentity), `identity_set` (upsertIdentity, fields merge) |
 | Result helpers | `src/mcp/tools/_result.ts` | `jsonResult` (summary + JSON), `bannerResult` (wordmark + summary + JSON, used by `on`/`off`/`corpus`), `textResult`, `deriveTitle`, `excerpt` |
 | UI server | `src/ui/server.ts` | Node `http.createServer`; serves vendored ESM from `dist/vendor/` (dev falls back to node_modules); JSON API incl. `/api/last-fetch`; **read-only by default** — `--write` enables PATCH `/api/entry/:id` |
-| UI HTML | `src/ui/web.html` | Real HTML file — **Preact 10 + HTM** loaded via ESM at `/vendor/*.js`; `<script type="importmap">` resolves bare `"preact"` specifier for `hooks.module.js`; 2 themes (light default / dark, CSS vars, `localStorage`); 4 tabs (Entries · Graph · Tags · Identity); continuous-physics canvas force-graph with thermal noise; regex markdown renderer; SessionsPanel (last 5 sessions) beside entry detail; mini corpus stat footer in sidebar; `@project` click-to-filter. Built by `scripts/copy-ui.mjs`. |
+| UI HTML | `src/ui/web.html` | Real HTML file — **Preact 10 + HTM** loaded via ESM at `/vendor/*.js`; `<script type="importmap">` resolves bare `"preact"` specifier for `hooks.module.js`; 2 themes (light default / dark, CSS vars, `localStorage`); 4 tabs (Entries · Graph · Tags · Identity); canvas force-graph — thermal-noise seeding phase, then runs until the layout converges (average node speed below threshold for 30 consecutive frames, hard ceiling 1200 frames) and auto-fits once; degree-scaled node radii, per-edge-type toggles that also gate the physics, node search, `localStorage`-persisted pins; regex markdown renderer; SessionsPanel (last 5 sessions) beside entry detail; mini corpus stat footer in sidebar; `@project` click-to-filter. Built by `scripts/copy-ui.mjs`. |
 
 ---
 
@@ -255,8 +255,12 @@ score(id) = Σ  1 / (RRF_K + rank_i + 1)
 v0.3.0 turns the store into a *steerer* — recall returns signal, not just matches.
 
 - **Link graph.** `src/graph/links.ts` (`deriveLinks`) is the single rule for edges — explicit
-  `[[..]]` resolved by basename then title-slug, plus implicit shared-project and shared-tag
-  edges (capped, strongest type wins). It powers the dashboard's `/api/graph` + `/api/backlinks`.
+  typed relations from `entry_update`'s `links`, explicit `[[..]]` resolved by basename then
+  title-slug, plus implicit shared-project and shared-tag edges (capped). The strongest type
+  wins per target: `relation > wikilink > project > tag`. It powers the dashboard's
+  `/api/graph` + `/api/backlinks`; both treat `relation` and `wikilink` as explicit references.
+  Dangling link ids (the target was deleted — `entry_update` does no referential check) are
+  dropped during derivation.
 - **Per-kind boost + status filter.** `hybridSearch` multiplies each fused score by a per-kind
   factor (memo > question > decision/intention > pattern > research/note, tunable via
   `companion_config.recall_boost`) and drops `superseded`/`archived` entries unless

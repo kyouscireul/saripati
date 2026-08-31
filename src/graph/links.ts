@@ -3,16 +3,17 @@
  *
  * Two consumers rely on this exact rule so they can never disagree: the web
  * dashboard's `/api/graph` + `/api/backlinks` endpoints. Edges are (1) explicit
- * `[[wikilinks]]` in an entry's body resolved to other entries, plus (2) implicit
+ * typed relations recorded via `entry_update`'s `links`, (2) explicit
+ * `[[wikilinks]]` in an entry's body resolved to other entries, plus (3) implicit
  * edges from shared project and shared tags (capped). The strongest edge type
- * wins per target (wikilink > project > tag).
+ * wins per target (relation > wikilink > project > tag).
  *
  * Extracted from the retired MD-sync engine in v0.3.0 — this is now the sole home
  * of the graph derivation logic.
  */
 
 import type { DB } from "../db/db.js";
-import { allEntries, type EntryKind } from "../db/queries.js";
+import { allEntries, type EntryKind, type EntryLink, type LinkRel } from "../db/queries.js";
 
 const IMPLICIT_LINK_CAP = 6; // cap shared-project / shared-tag edges to avoid a hairball
 
@@ -39,7 +40,7 @@ function excerpt(body: string, max = 200): string {
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 }
 
-export type EdgeType = "wikilink" | "project" | "tag";
+export type EdgeType = "relation" | "wikilink" | "project" | "tag";
 
 export interface LinkNode {
   id: number;
@@ -49,11 +50,14 @@ export interface LinkNode {
   project: string | null;
   tags: string[];
   description: string;
+  links: EntryLink[];
 }
 
 export interface LinkEdge {
   to: LinkNode;
   type: EdgeType;
+  /** For `relation` edges only: which typed relation the author asserted. */
+  rel?: LinkRel;
 }
 
 export interface LinkContext {
@@ -74,6 +78,7 @@ export function buildLinkContext(db: DB): LinkContext {
     project: e.project,
     tags: e.tags,
     description: excerpt(e.body),
+    links: e.links,
   }));
   const byId = new Map<number, LinkNode>();
   const byBasename = new Map<string, LinkNode>();
@@ -89,27 +94,37 @@ export function buildLinkContext(db: DB): LinkContext {
 export const WIKILINK_RE = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g;
 
 /**
- * Canonical link rule: (1) explicit `[[...]]` in the body resolved to entries,
- * plus (2) implicit edges from shared project and shared tags (capped). Strongest
- * edge type wins per target (wikilink > project > tag).
+ * Canonical link rule: (1) explicit typed relations from `entry_update`'s `links`,
+ * (2) explicit `[[...]]` in the body resolved to entries, plus (3) implicit edges
+ * from shared project and shared tags (capped). Strongest edge type wins per
+ * target (relation > wikilink > project > tag).
  */
 export function deriveLinks(ctx: LinkContext, node: LinkNode, body: string): LinkEdge[] {
-  const best = new Map<number, EdgeType>();
-  const rank: Record<EdgeType, number> = { wikilink: 3, project: 2, tag: 1 };
-  const consider = (id: number, type: EdgeType) => {
+  const best = new Map<number, { type: EdgeType; rel?: LinkRel }>();
+  const rank: Record<EdgeType, number> = { relation: 4, wikilink: 3, project: 2, tag: 1 };
+  const consider = (id: number, type: EdgeType, rel?: LinkRel) => {
     if (id === node.id) return;
     const prev = best.get(id);
-    if (!prev || rank[type] > rank[prev]) best.set(id, type);
+    if (!prev || rank[type] > rank[prev.type]) best.set(id, { type, rel });
   };
 
-  // (1) explicit wikilinks — resolve by basename first, then by title slug.
+  // (1) explicit typed relations — the author asserted these, so they outrank
+  // everything derived. Dangling ids (the target was deleted; `entry_update`
+  // does no referential check) must be dropped BEFORE consider(), or the
+  // byId.get(id)! below would hand callers `{ to: undefined }`.
+  for (const l of node.links) {
+    if (!ctx.byId.has(l.id)) continue;
+    consider(l.id, "relation", l.rel);
+  }
+
+  // (2) explicit wikilinks — resolve by basename first, then by title slug.
   for (const m of body.matchAll(WIKILINK_RE)) {
     const target = m[1].trim();
     const found = ctx.byBasename.get(target) ?? ctx.byTitleSlug.get(slugify(target));
     if (found) consider(found.id, "wikilink");
   }
 
-  // (2) implicit edges — shared project, then shared tags, each capped.
+  // (3) implicit edges — shared project, then shared tags, each capped.
   if (node.project) {
     let n = 0;
     for (const other of ctx.nodes) {
@@ -130,5 +145,5 @@ export function deriveLinks(ctx: LinkContext, node: LinkNode, body: string): Lin
     }
   }
 
-  return [...best.entries()].map(([id, type]) => ({ to: ctx.byId.get(id)!, type }));
+  return [...best.entries()].map(([id, v]) => ({ to: ctx.byId.get(id)!, type: v.type, rel: v.rel }));
 }

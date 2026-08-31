@@ -248,7 +248,7 @@ flowchart LR
     F --> G["fetch /api/config → {writeMode, semanticMode}\nfetch /api/status → corpus + sessions_recent[5]\nfetch /api/last-fetch → agent's last recall\nfetch /api/entries → initial list"]
 
     G -->|Entries tab| H["GET /api/entries?q=&kind=&tag=&project=&semantic=1\nGET /api/entry/:id → detail (+ status badge)\nGET /api/backlinks/:id → backlinks"]
-    G -->|Graph tab| I["GET /api/graph → {nodes≤300, edges≤600 via deriveLinks}\nContinuous physics + thermal noise RAF"]
+    G -->|Graph tab| I["GET /api/graph → {nodes≤150, edges≤600 via deriveLinks}\nStrongest type per pair: relation > wikilink > project > tag\nPhysics RAF: noise seeding → run to convergence → auto-fit once"]
     G -->|Tags tab| J["GET /api/tags → [{tag, count}]"]
     G -->|Identity tab| K["GET /api/identity + /api/status"]
 

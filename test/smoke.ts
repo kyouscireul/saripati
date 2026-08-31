@@ -182,9 +182,33 @@ async function main(): Promise<void> {
     const research = ctx.byId.get(researchId)!;
     assert.equal(research.basename, basenameFor("research", "Lazada affiliate commission trends", researchId), "basename rule stable");
     const edges = deriveLinks(ctx, research, "Rates rose 4-6% for electronics.");
+    // Keep this block links-free: a typed link between these fixtures would
+    // outrank the shared-tag edge and this assertion would flip to "relation".
     assert.ok(edges.some((e) => e.to.id === relatedId && e.type === "tag"), "shared tag derives a tag edge");
+
+    // 3a1. Typed relations (entry_update `links`) become the strongest edge ----
+    // Append new fixtures AFTER this block — the nodes.length check above is exact.
+    updateEntry(db, relatedId, { links: [{ id: researchId, rel: "supersedes" }] });
+    const ctx2 = buildLinkContext(db);
+    const rel = ctx2.byId.get(relatedId)!;
+    assert.deepEqual(rel.links, [{ id: researchId, rel: "supersedes" }], "link context carries hydrated links");
+    const relEdges = deriveLinks(ctx2, rel, "").filter((e) => e.to.id === researchId);
+    assert.equal(relEdges.length, 1, "one edge per target — relation absorbs the redundant tag edge");
+    assert.equal(relEdges[0].type, "relation", "explicit typed link outranks a shared-tag edge");
+    assert.equal(relEdges[0].rel, "supersedes", "the specific rel rides along on the edge");
+
+    // Dangling ids (the target was deleted) and self-links must vanish, never
+    // surface as `{ to: undefined }` — /api/graph reads link.to.project directly.
+    updateEntry(db, relatedId, { links: [{ id: 999999, rel: "related" }, { id: relatedId, rel: "related" }] });
+    const ctx3 = buildLinkContext(db);
+    const e3 = deriveLinks(ctx3, ctx3.byId.get(relatedId)!, "");
+    assert.ok(e3.every((e) => e.to && e.to.id !== relatedId), "dangling ids and self-links produce no edge");
+    assert.ok(e3.every((e) => e.type !== "relation"), "no relation edge survives from dangling/self links");
+
+    updateEntry(db, relatedId, { links: [] }); // restore — later sections re-read the corpus
   }
   console.log("  ✓ link graph: buildLinkContext + deriveLinks (shared-tag edge)");
+  console.log("  ✓ typed relations: relation outranks tag, rel preserved, dangling/self dropped");
 
   // 3b. Identity round-trip (singleton, incremental merge) -----------------
   assert.equal(getIdentity(db), null, "identity starts empty");
