@@ -1,5 +1,14 @@
 name: Release
 
+# Publishing to npm is deliberately NOT automated. The account requires a TOTP
+# OTP at publish time, so releases go out by hand from a trusted machine:
+#
+#   npm run build && npm test
+#   npm publish --access public --ignore-scripts --otp=<fresh code>
+#
+# (--ignore-scripts keeps the publish inside the OTP's ~30s window.)
+# This workflow just turns the pushed tag into a GitHub Release.
+
 on:
   push:
     tags: ["v*"]
@@ -8,17 +17,29 @@ permissions:
   contents: write
 
 jobs:
-  # Tier 1 — publish to npm (the primary distribution path).
-  npm-publish:
+  github-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need history for the tag's annotation
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
-      - run: npm publish --access public
+      - run: npm run build
+      - run: npm test
+      - name: Create GitHub Release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Prefer the annotated tag's own message; fall back to the commit subject.
+          notes="$(git tag -l --format='%(contents)' "$TAG")"
+          if [ -z "${notes// }" ]; then
+            notes="$(git log -1 --pretty=%B "$TAG")"
+          fi
+          printf '%s\n' "$notes" > release-notes.txt
+          printf '\n\n---\n\nInstall: `npx saripati@%s setup`\n' "${TAG#v}" >> release-notes.txt
+          gh release create "$TAG" --title "$TAG" --notes-file release-notes.txt --verify-tag
