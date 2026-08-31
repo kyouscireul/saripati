@@ -382,14 +382,14 @@ async function main(): Promise<void> {
   const dup = (await client.callTool({ name: "vault", arguments: { content: dupText, kind: "decision" } })) as {
     content: { text: string }[];
   };
-  const dupPayload = JSON.parse(dup.content[0].text.split("\n\n").slice(1).join("\n\n"));
+  const dupPayload = JSON.parse(dup.content[0].text.split("\n\n").at(-1)!);
   assert.ok(dupPayload.saved?.id, "vault save returns the new id");
   assert.ok(Array.isArray(dupPayload.conflicts) && dupPayload.conflicts.length >= 1, "near-duplicate save flags a conflict");
 
   // entry_update resolves it: supersede the duplicate; recall then drops it.
   await client.callTool({ name: "entry_update", arguments: { id: dupPayload.saved.id, status: "superseded", superseded_by: dupPayload.conflicts[0].id } });
   const after = (await client.callTool({ name: "vault", arguments: { query: dupText } })) as { content: { text: string }[] };
-  const afterResults = JSON.parse(after.content[0].text.split("\n\n").slice(1).join("\n\n")) as { id: number }[];
+  const afterResults = JSON.parse(after.content[0].text.split("\n\n").at(-1)!) as { id: number }[];
   assert.ok(!afterResults.some((r) => r.id === dupPayload.saved.id), "superseded duplicate excluded from recall");
   console.log("  ✓ vault: recall + save, conflict detection, entry_update supersede");
 
@@ -397,7 +397,7 @@ async function main(): Promise<void> {
   const who = (await client.callTool({ name: "whoami", arguments: {} })) as { content: { text: string }[] };
   assert.ok(who.content[0].text.includes("Kyou"), "whoami must return the identity");
   const boot = (await client.callTool({ name: "on", arguments: {} })) as { content: { text: string }[] };
-  const bootPayload = JSON.parse(boot.content[0].text.split("\n\n").slice(1).join("\n\n"));
+  const bootPayload = JSON.parse(boot.content[0].text.split("\n\n").at(-1)!);
   assert.equal(bootPayload.identity.user_name, "Kyou", "on payload must include identity");
   // Nudges: the active intention inserted earlier must surface.
   assert.ok(
@@ -410,7 +410,7 @@ async function main(): Promise<void> {
   // Focus bias: set a focus project, `on` leads recent entries with it.
   await client.callTool({ name: "identity_set", arguments: { user_prefs: { focus: "propello" } } });
   const focused = (await client.callTool({ name: "on", arguments: {} })) as { content: { text: string }[] };
-  const focusedPayload = JSON.parse(focused.content[0].text.split("\n\n").slice(1).join("\n\n"));
+  const focusedPayload = JSON.parse(focused.content[0].text.split("\n\n").at(-1)!);
   assert.equal(focusedPayload.focus, "propello", "on echoes the active focus");
   assert.equal(focusedPayload.recent_entries[0].project, "propello", "focus biases recent entries to the project");
   console.log("  ✓ on: focus bias leads recent entries with the focused project");
