@@ -13,6 +13,7 @@
  */
 
 import { banner, caps } from "./term/theme.js";
+import { preflight } from "./preflight.js";
 import { VERSION } from "./version.js";
 
 const USAGE = `Usage:
@@ -36,6 +37,11 @@ function helpScreen(): string {
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
+
+  // Static environment check before any native module loads. `version` and
+  // `help` stay usable on an unsupported machine — they are how a user answers
+  // "what do I even have here?" while reporting the problem.
+  if (command === "setup" || command === "mcp" || command === "ui") preflight();
 
   switch (command) {
     case "setup": {

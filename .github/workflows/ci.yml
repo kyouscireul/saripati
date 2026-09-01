@@ -6,20 +6,52 @@ on:
   pull_request:
     branches: [main]
 
+# SARIPATI_HOME is set per-job to a workspace-relative path so the model cache
+# resolves identically on all three runners — "~" is not portable to Windows.
+
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    name: build+test ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22, 24]
+    env:
+      SARIPATI_HOME: ${{ github.workspace }}/.saripati-ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
           cache: npm
       # Cache the one-time embedding model download between runs.
       - uses: actions/cache@v4
         with:
-          path: ~/.saripati/models
-          key: minilm-model-v1
+          path: ${{ github.workspace }}/.saripati-ci/models
+          key: minilm-model-v1-${{ runner.os }}
       - run: npm ci
       - run: npm run build
       - run: npm test
+
+  # The check build-test cannot make: what a stranger actually receives.
+  # Packs the tarball, installs it outside the repo with install scripts
+  # enabled, and drives the installed package only.
+  install-smoke:
+    name: cold install ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:install

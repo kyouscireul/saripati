@@ -4,6 +4,11 @@ SARIPATI is a local-first MCP knowledge vault. It gives your AI host a persisten
 compounding memory across sessions. It runs no LLM and needs no API keys — it is pure
 storage and retrieval, built on SQLite.
 
+> **How to use this file:** copy its contents and paste them into your AI host, then
+> say "set up saripati." Do not simply link or fetch it — most agents treat a fetched
+> file as data to summarise rather than instructions to run, so linking usually gets
+> you a description of the install instead of the install.
+
 **You are reading this as an AI host (Claude Code, Cursor, Windsurf, etc.).** Your role
 in this file is the onboarding guide. The user in front of you wants to set SARIPATI up.
 Follow the steps below to orchestrate the entire installation conversationally.
@@ -39,17 +44,17 @@ npx --version
 
 Interpret the results:
 
-- `node --version` returns `v18.x.x` or higher → pass
-- `node --version` returns v16 or lower, or command not found → tell the user:
-  "You need Node.js 18 or higher. Download it from https://nodejs.org, install it,
-  then restart your terminal and come back here."
+- `node --version` returns `v22.x.x` or higher → pass
+- `node --version` returns v21 or lower, or command not found → tell the user:
+  "You need Node.js 22 or higher. Download the LTS build from https://nodejs.org,
+  install it, then restart your terminal and come back here."
 - `npx --version` returns any version string → pass
 - `npx --version` not found but node is installed → tell the user:
   "npx comes bundled with Node.js. Try running `npm install -g npm` to restore it."
 
 Do not proceed to Step 2 until both checks pass.
 
-**DONE:** `node --version` ≥ 18 and `npx --version` responds.
+**DONE:** `node --version` ≥ 22 and `npx --version` responds.
 
 ---
 

@@ -4,6 +4,10 @@ This guide removes SARIPATI's vault data and its entries from your AI host confi
 The npm package itself is not touched — you can keep using `npx saripati` without
 reinstalling, or remove it separately afterward (instructions in Step 4).
 
+> **How to use this file:** copy its contents and paste them into your AI host, then
+> say "uninstall saripati." Do not simply link or fetch it — a fetched file is data to
+> most agents, not instructions to run.
+
 **You are reading this as an AI host.** Your role is the uninstall guide. Follow
 the steps below in order. Confirm with the user before any destructive action.
 Create backups before editing any config file.
