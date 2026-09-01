@@ -27,7 +27,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # --ignore-scripts keeps better-sqlite3 from compiling — see ci.yml.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm rebuild sharp
       - run: npm run build
       - run: npm test
       - run: npm run test:install
