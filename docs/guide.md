@@ -14,12 +14,20 @@ a single SQLite file on your machine.
 
 ## Installation
 
+**Requires Node 22 or newer.** Every native dependency ships prebuilt binaries, so no
+compiler, Visual Studio, or Xcode is needed. Windows on ARM is unsupported — `sqlite-vec`
+publishes no `win32-arm64` build.
+
 ### Guided — ONBOARD.md (recommended)
 
-Open [`ONBOARD.md`](../ONBOARD.md) in your AI host and say "set up saripati." The AI
-orchestrates the entire installation conversationally — checks Node, asks five identity
-questions, generates and runs the setup command, and walks you through the system prompt.
-MCP comes online at the end.
+Open [`ONBOARD.md`](../ONBOARD.md), **copy its contents, and paste them into your AI host**,
+then say "set up saripati." The AI orchestrates the entire installation conversationally —
+checks Node, asks five identity questions, generates and runs the setup command, and walks you
+through the system prompt. MCP comes online at the end.
+
+Paste the contents; do not just link the file. Most agents treat a *fetched* file as data to
+summarise rather than instructions to execute, so pointing an agent at the URL usually returns
+a description of the install instead of the install.
 
 ### Manual — `saripati setup`
 
@@ -293,6 +301,21 @@ npm publish --access public --ignore-scripts --otp=<6-digit-code>
 
 **Tools not showing up in host** — restart the host (it re-reads MCP config on start); verify
 with `claude mcp list`; ensure Node ≥ 22 (`node --version`).
+
+**Install fails with a `node-gyp` error / "Could not find any Visual Studio installation"** —
+you should never see this from v0.5.0 onward, since nothing is compiled on your machine. If you
+do, you are almost certainly installing an older version: check with `npx saripati@latest
+version` and see the upgrade steps below. Installing `saripati` <= 0.4.2 on Node 24 reproduces
+exactly this, because `better-sqlite3` 11 fetched per-ABI binaries and fell back to `node-gyp`
+when none matched.
+
+**`npm error EBADENGINE` / "Unsupported engine"** — the machine is on Node 18 or 20. Both are
+end of life; install Node 22 LTS from https://nodejs.org and retry. This refusal is deliberate:
+a clear message now instead of a confusing runtime failure later.
+
+**"No prebuilt sqlite-vec extension exists for win32-arm64"** — Windows on ARM is not supported.
+`sqlite-vec` publishes no build for it, so semantic search cannot load. Run under an emulated
+x64 Node, or open an issue.
 
 **"Embedding dim mismatch"** — the model cache may be corrupted. Delete `~/.saripati/models/`
 and restart.

@@ -40,6 +40,7 @@ graph TD
 
     subgraph SARIPATI["saripati mcp (child process)"]
         CLI[cli.ts — command dispatcher]
+        PRE[preflight.ts — platform gate + native-failure diagnosis]
         SRV[mcp/server.ts — McpServer + StdioTransport]
         subgraph TOOLS["Tool Registrations (9)"]
             TV[vault.ts — vault: save/recall + conflict check]
@@ -56,7 +57,7 @@ graph TD
         EMB[embed/embedder.ts — MiniLM-L6-v2 via @xenova/transformers]
         SRCH[search/hybrid.ts — RRF + per-kind boost + status filter]
         subgraph DB["db/"]
-            DBD[db.ts — openDb, WAL, sqlite-vec load]
+            DBD[db.ts — openDb, WAL, sqlite-vec load, native-failure rescue]
             DBM[migrations.ts — PRAGMA user_version runner]
             DBQ[queries/*.ts — entries, search, sessions, projects, identity, corpus]
             DBS[schema.ts — SCHEMA_SQL, EMBEDDING_DIM=384]
@@ -118,9 +119,10 @@ writes the last fetch to a small JSON in the data dir, which the UI reads at `/a
 | Module | File | Responsibility |
 |--------|------|----------------|
 | CLI dispatcher | `src/cli.ts` | Parses `process.argv`, lazy-imports the right subcommand (`setup`/`mcp`/`ui`); bare invocation + `help` print the banner |
+| Preflight | `src/preflight.ts` | Static platform/Node gate run before any native module loads, plus `explainNativeFailure` — turns an ABI or extension-load throw into one framed, actionable line. **stderr only** |
 | Path resolution | `src/config.ts` | Resolves `dataDir`, `dbPath`, `modelCacheDir`; `ensureDataDir` |
 | Presentation | `src/term/theme.ts` | Zero-dep terminal voice: `caps()`, palette, `◈` symbols, `banner`, `frame`, `steps`, `report`; single `VERSION` from package.json |
-| Database open | `src/db/db.ts` | Opens SQLite, sets WAL + FK pragmas, loads sqlite-vec, applies `SCHEMA_SQL`, then runs migrations |
+| Database open | `src/db/db.ts` | Opens SQLite, sets WAL + FK pragmas, loads sqlite-vec, applies `SCHEMA_SQL`, then runs migrations; wraps the two native steps so an install failure is diagnosed rather than dumped |
 | Migrations | `src/db/migrations.ts` | `PRAGMA user_version` runner; migration 2 rebuilds `entries` to widen `kind` + add lifecycle columns |
 | Schema | `src/db/schema.ts` | Embedded baseline `SCHEMA_SQL` string; defines `EMBEDDING_DIM = 384` |
 | Queries | `src/db/queries/*.ts` | Domain modules (entries, search, sessions, projects, identity, corpus) re-exported by `queries.ts`; atomic tri-table tx; nudge helpers (`unresolvedQuestions`, `activeIntentions`, `unreadMemos`, `lastEntryAtByProject`) |
@@ -186,7 +188,7 @@ sequenceDiagram
     MCP->>Srch: hybridSearch(db, embedding, queryText, {limit, kind, boosts, includeSuperseded})
     Srch->>DB: vecSearch(embedding, candidateCount) → VecHit[]
     Srch->>DB: ftsSearch(queryText, candidateCount) → FtsHit[]
-    Srch->>Srch: RRF fusion × per-kind boost; drop superseded/archived
+    Srch->>Srch: RRF fusion × per-kind boost — drop superseded/archived
     Srch->>DB: getEntriesByIds(merged id set)
     Srch-->>MCP: HybridResult[] sorted by score desc
     MCP->>MCP: writeLastFetch() — retrieval trace for the UI
@@ -325,6 +327,24 @@ the vault path — goes to stderr, rendered with `caps(process.stderr)`.
 > (better-sqlite3, sqlite-vec, onnxruntime-node) cannot be bundled cleanly, so the feature
 > was never real. npm is the supported distribution path.
 
+**Nothing is ever compiled on a user's machine.** Every native dependency ships prebuilt
+binaries: `better-sqlite3` 13 is N-API and bundles eight (`darwin`/`linux`/`linuxmusl`/`win32`
+x `x64`/`arm64`) inside its tarball, `onnxruntime-node` bundles six, and `sqlite-vec` publishes
+per-platform loadable extensions as optional dependencies. No compiler, Visual Studio, or Xcode
+is required, and because N-API is ABI-stable the same binary keeps working across future Node
+majors.
+
+The one gap no version bump closes: **`sqlite-vec` publishes no `win32-arm64` build**, so ARM
+Windows fails at extension load rather than at compile. `preflight.ts` names that case
+explicitly instead of letting it surface as a generic SQLite error.
+
+This is verified, not assumed. `npm run test:install`
+(`scripts/pack-install-check.mjs`) packs the tarball, installs it into a temp directory
+**outside the repo with install scripts enabled**, and then drives only the installed package —
+asserting the version, vault creation, a real MCP handshake, that stdout carried nothing but
+JSON-RPC, and above all that no `build/` directory was produced. `npm test` runs from source and
+cannot catch this class of failure.
+
 Host detection in `setup` scans for: `~/.claude.json` (Claude Code), `~/.cursor/mcp.json`
 (Cursor), `~/.codeium/windsurf/mcp_config.json` (Windsurf),
 `%APPDATA%/Claude/claude_desktop_config.json` (Claude Desktop).
@@ -336,18 +356,46 @@ Host detection in `setup` scans for: `~/.claude.json` (Claude Code), `~/.cursor/
 ```mermaid
 graph LR
     subgraph CI["CI (push to main / PR)"]
-        C1[checkout] --> C2[setup-node@20]
-        C2 --> C3[cache MiniLM model]
-        C3 --> C4[npm ci]
-        C4 --> C5[npm run build]
-        C5 --> C6[npm test]
+        direction TB
+        M["matrix: ubuntu | windows | macos<br/>x node 22 | 24"]
+        M --> B1["build+test job"]
+        M --> B2["cold install job"]
+        B1 --> T1["npm ci --ignore-scripts"]
+        T1 --> T2["npm rebuild sharp"]
+        T2 --> T3["npm run build"]
+        T3 --> T4["npm test"]
+        B2 --> S1["npm run build"]
+        S1 --> S2["npm run test:install"]
     end
 
     subgraph REL["Release (push tag v*)"]
-        R1[npm-publish job] --> R2[npm publish --access public]
+        direction TB
+        R1["npm ci --ignore-scripts"] --> R2["build + test + test:install"]
+        R2 --> R3["gh release create from tag"]
     end
 ```
 
-Release triggers on any tag matching `v*`. The npm publish job uses `NODE_AUTH_TOKEN` from
-repository secrets. (In practice, publishing is done manually with a fresh OTP, since the npm
-account uses TOTP 2FA.)
+**12 cells** — three operating systems by two Node versions, across both jobs. The matrix is
+not decoration: it is what catches a native dependency compiling silently on a runner that
+happens to have a toolchain.
+
+`--ignore-scripts` on the bootstrap is deliberate. npm marks `better-sqlite3`
+`hasInstallScript` because it ships a `binding.gyp`, so a plain install runs the implicit
+`node-gyp rebuild` and discards the prebuilt binaries in its tarball. Skipping scripts makes
+"nothing native is ever compiled" an enforced invariant. `sharp` is the one dependency that
+genuinely needs its install script (`prebuild-install` fetches the binary
+`@xenova/transformers` imports), so it is rebuilt explicitly. The cold-install job deliberately
+does **not** skip scripts inside its temp install — that is the real user path.
+
+Release triggers on any tag matching `v*` and creates a GitHub Release from the tag's own
+annotation. **It does not publish to npm.** That job was removed after failing with `ENEEDAUTH`
+on five consecutive tags: the npm account requires a TOTP OTP at publish time, so publishing is
+manual and deliberate:
+
+```bash
+npm run build && npm test && npm run test:install
+npm publish --access public --ignore-scripts --otp=<fresh code>
+```
+
+`--ignore-scripts` keeps the publish inside the OTP's ~30 s window, but it also skips
+`prepublishOnly` — so the three commands above are the only safeguard and must not be skipped.

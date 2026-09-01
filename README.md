@@ -17,6 +17,10 @@ call SARIPATI to distill and store the essence. Weeks later, it recalls it seman
 It is **not** a chat app. It runs no LLM and needs no API keys. Your entire knowledge base
 is a single SQLite file on your own machine.
 
+![The Steer tab — open questions, live intentions, unread memos and stale projects, drawn from the vault at session start](docs/media/steer.png)
+
+<sub>The **Steer** tab: what the vault hands your AI at the start of a session — not a search box, a set of open threads.</sub>
+
 ---
 
 ## Why
@@ -198,11 +202,6 @@ npx saripati ui --no-semantic    # FTS only — faster cold start, no model load
 npx saripati ui --port 8080      # custom port
 ```
 
-<!-- Capture pending: docs/media/steer.png (Steer tab) and docs/media/graph.png
-     (Graph tab) are referenced here but not yet committed. Drop real captures at
-     those paths and delete this comment. -->
-![The Steer tab — nudges, retrieval trace, and the live corpus](docs/media/steer.png)
-
 A local browser UI built on **Preact 10 + HTM** (no CDN, no bundler — vendored ESM served at
 `/vendor/*.js`). Five tabs — **Steer** opens by default:
 
@@ -215,6 +214,31 @@ A local browser UI built on **Preact 10 + HTM** (no CDN, no bundler — vendored
 | **Identity** | Profile · companion config (stale\_days, conflict\_threshold, per-kind recall boosts) · session history. |
 
 Editing is **off by default** — pass `--write` to enable mutations (kind, tags, status, resolved, active).
+
+### Graph
+
+![Graph tab — entries clustered by project, with author-asserted relation edges crossing between them](docs/media/graph.png)
+
+Clusters are projects; the pink threads crossing between them are **relation** edges — links the
+author asserted, not similarity the tool guessed. Each edge type toggles independently, and a
+hidden type leaves the physics simulation rather than just the render, so the layout reflects
+exactly what you chose to look at.
+
+### Entries
+
+![Entries tab — hybrid search, kind and status filters, entry detail with backlinks, and the session rail](docs/media/entries.png)
+
+Every entry carries its kind, confidence, tags and lifecycle state. **Backlinks** are computed,
+not stored, so an entry knows what points at it without anything maintaining a reverse index by
+hand. Recent sessions sit in the right rail with their own next-steps.
+
+### Identity
+
+![Identity tab — profile, companion persona, per-kind recall boosts, and session history](docs/media/identity.png)
+
+The vault knows who it serves and how it should sound, and the **recall boost** table is the
+Steerer's priority signal made visible and editable — the per-kind multipliers that decide what
+floats to the top of a recall.
 
 ---
 

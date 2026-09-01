@@ -6,7 +6,7 @@
 flowchart TD
     A([User wants to install SARIPATI]) --> B{Distribution path}
 
-    B -->|Recommended| C["Open ONBOARD.md in AI host\n(AI orchestrates setup conversationally)"]
+    B -->|Recommended| C["Paste ONBOARD.md contents into AI host\n(AI orchestrates setup conversationally)"]
     B -->|Manual CLI| C2["npx saripati setup ./setup.md --write"]
     B -->|Claude Code CLI native| D["claude mcp add saripati -s user\n-- npx -y saripati mcp"]
     B -->|Manual JSON edit| E["Edit host mcpServers config directly"]
