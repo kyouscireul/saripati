@@ -1,5 +1,10 @@
 # SARIPATI
 
+[![npm](https://img.shields.io/npm/v/saripati.svg)](https://www.npmjs.com/package/saripati)
+[![node](https://img.shields.io/node/v/saripati.svg)](https://nodejs.org)
+[![CI](https://github.com/kyouscireul/saripati/actions/workflows/ci.yml/badge.svg)](https://github.com/kyouscireul/saripati/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/saripati.svg)](./LICENSE)
+
 **A local-first, provider-agnostic knowledge vault for any AI host.**
 
 > *sari pati* (Malay) — the essence, the concentrated extract.
@@ -40,12 +45,23 @@ is a single SQLite file on your own machine.
 
 ## Install
 
-**Quickest path:** open [`ONBOARD.md`](./ONBOARD.md) in your AI host (Claude Code,
-Cursor, Windsurf, etc.) and say "set up saripati." The AI checks your environment,
-asks five identity questions, generates and runs the setup, and adds the system prompt
-— everything in one conversation, before MCP is running.
+**Requires Node 22 or newer** (Node 22 LTS recommended; 24 supported). Every native
+dependency ships prebuilt binaries, so no compiler, Visual Studio, or Xcode is needed.
+Windows on ARM is not currently supported — `sqlite-vec` publishes no `win32-arm64`
+build. SARIPATI tells you plainly if your machine is unsupported instead of failing
+with a build log.
 
-Or go manual:
+**Guided path — let your AI do it.** Open [`ONBOARD.md`](./ONBOARD.md), **copy its
+contents, and paste them into your AI host** (Claude Code, Cursor, Windsurf, etc.),
+then say "set up saripati." It checks your environment, asks five identity questions,
+generates and runs the setup, and adds the system prompt — all in one conversation,
+before MCP is running.
+
+> Paste the contents; do not just link the file. Most agents treat *fetched* files as
+> data to read, not instructions to execute, so pointing an agent at this URL will
+> usually get you a summary instead of an install.
+
+**Manual path — do it yourself.** Equally supported:
 
 ```bash
 npx saripati setup                          # create vault, print config + detected hosts
@@ -88,6 +104,48 @@ To remove SARIPATI later, open [`UNINSTALL.md`](./UNINSTALL.md) in your AI host.
 
 A typical flow: `on` at session start → the AI researches with its own tools → `vault` save
 → (conflict? `entry_update`) → next week `vault` recall → `off` at the end.
+
+### What that actually looks like
+
+**Monday — the agent finishes researching and distils what it learned.**
+
+```jsonc
+vault({
+  topic:    "Postgres connection pooling for serverless",
+  findings: [
+    "PgBouncer transaction mode breaks prepared statements; use session mode or disable them.",
+    "Supabase's pooler runs on 6543; the direct 5432 port bypasses it and exhausts connections."
+  ],
+  tags:     ["postgres", "serverless", "pooling"],
+  project:  "checkout-api",
+  sources:  [{ url: "https://supabase.com/docs/guides/database/connecting-to-postgres" }]
+})
+
+// → "Saved research #142: \"Postgres connection pooling for serverless\"."
+// { "saved": { "id": 142, "title": "Postgres connection pooling for serverless",
+//              "kind": "research" } }
+```
+
+**Three weeks later, in a cold session with no shared history** — a paraphrase finds it:
+
+```jsonc
+vault({ query: "why do our prepared statements fail in production?" })
+
+// → "Recalled 2 entries for \"why do our prepared statements fail in production?\"."
+// [
+//   { "id": 142, "kind": "research", "title": "Postgres connection pooling for serverless",
+//     "excerpt": "- PgBouncer transaction mode breaks prepared statements; use session…",
+//     "tags": ["postgres", "serverless", "pooling"], "project": "checkout-api",
+//     "status": "active", "confidence": null, "score": 0.03252,
+//     "matched": ["semantic", "keyword"] },
+//   { "id": 98, "kind": "decision", "title": "Pin the pooler to session mode",
+//     "excerpt": "We accept the connection ceiling in exchange for prepared…",
+//     "status": "active", "score": 0.01639, "matched": ["semantic"] }
+// ]
+```
+
+Nothing was re-researched, and no keyword in the question appears in the stored title.
+`matched` shows which retriever fired — `score` is the fused rank.
 
 ---
 
@@ -140,6 +198,11 @@ npx saripati ui --no-semantic    # FTS only — faster cold start, no model load
 npx saripati ui --port 8080      # custom port
 ```
 
+<!-- Capture pending: docs/media/steer.png (Steer tab) and docs/media/graph.png
+     (Graph tab) are referenced here but not yet committed. Drop real captures at
+     those paths and delete this comment. -->
+![The Steer tab — nudges, retrieval trace, and the live corpus](docs/media/steer.png)
+
 A local browser UI built on **Preact 10 + HTM** (no CDN, no bundler — vendored ESM served at
 `/vendor/*.js`). Five tabs — **Steer** opens by default:
 
@@ -186,9 +249,28 @@ Data lives in `~/.saripati/` by default (override with `SARIPATI_HOME` or `SARIP
 ```bash
 npm install
 npm run build      # tsc → dist/ (+ vendored UI bundles)
-npm test           # end-to-end smoke test
+npm test           # end-to-end smoke test (from source)
+npm run test:install # cold install: pack, install the tarball, drive it as a user would
 npm run dev -- mcp # run from source via tsx
 ```
+
+## Contributing
+
+Issues and pull requests are welcome — bug reports, platform coverage, and
+documentation fixes especially. Open an
+[issue](https://github.com/kyouscireul/saripati/issues) or start a
+[discussion](https://github.com/kyouscireul/saripati/discussions).
+
+Before opening a PR, run the full gate:
+
+```bash
+npm run build
+npm test              # smoke suite, from source
+npm run test:install  # cold install — packs, installs, and drives the tarball
+```
+
+If you hit an install failure, include the output of `npx saripati@latest version`
+and your `node -v` — that pair identifies almost every case.
 
 ## License
 

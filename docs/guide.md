@@ -292,7 +292,7 @@ npm publish --access public --ignore-scripts --otp=<6-digit-code>
 ## Troubleshooting
 
 **Tools not showing up in host** — restart the host (it re-reads MCP config on start); verify
-with `claude mcp list`; ensure Node ≥ 18 (`node --version`).
+with `claude mcp list`; ensure Node ≥ 22 (`node --version`).
 
 **"Embedding dim mismatch"** — the model cache may be corrupted. Delete `~/.saripati/models/`
 and restart.

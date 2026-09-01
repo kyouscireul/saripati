@@ -5,6 +5,7 @@ import * as sqliteVec from "sqlite-vec";
 import { SCHEMA_SQL } from "./schema.js";
 import { runMigrations } from "./migrations.js";
 import { ensureDataDir, resolvePaths, type Paths } from "../config.js";
+import { explainNativeFailure, renderIssue } from "../preflight.js";
 
 export type DB = Database.Database;
 
@@ -17,12 +18,22 @@ export function openDb(paths?: Paths): DB {
   ensureDataDir(p);
   mkdirSync(dirname(p.dbPath), { recursive: true });
 
-  const db = new Database(p.dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  // The two native steps. A failure here is almost always an install problem,
+  // not a data problem, so translate it into one actionable line on stderr
+  // before rethrowing — never onto stdout, which carries MCP JSON-RPC.
+  let db: DB;
+  try {
+    db = new Database(p.dbPath);
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
 
-  // sqlite-vec ships a loadable extension; this wires vec0 into this connection.
-  sqliteVec.load(db);
+    // sqlite-vec ships a loadable extension; this wires vec0 into this connection.
+    sqliteVec.load(db);
+  } catch (err) {
+    const issue = explainNativeFailure(err);
+    if (issue) process.stderr.write(`${renderIssue(issue)}\n`);
+    throw err;
+  }
 
   db.exec(SCHEMA_SQL);
 
