@@ -8,6 +8,19 @@ on:
 
 # SARIPATI_HOME is set per-job to a workspace-relative path so the model cache
 # resolves identically on all three runners — "~" is not portable to Windows.
+#
+# Bootstrap installs with --ignore-scripts on purpose. npm marks better-sqlite3
+# `hasInstallScript` (it ships a binding.gyp), so a plain install runs the
+# implicit `node-gyp rebuild` and compiles from source — throwing away the
+# prebuilt binaries in its tarball and demanding a toolchain. That is what
+# breaks windows-latest, whose Visual Studio 18 node-gyp 11.x cannot detect.
+# Skipping scripts guarantees the invariant this project cares about: nothing
+# native is ever compiled. sharp is the one dependency that genuinely needs its
+# install script (prebuild-install fetches its binary, which @xenova/transformers
+# imports), so it is rebuilt explicitly afterwards.
+#
+# The cold-install job below deliberately does NOT skip scripts inside its temp
+# install — that is the real user path, and running it is the whole point.
 
 jobs:
   build-test:
@@ -31,7 +44,8 @@ jobs:
         with:
           path: ${{ github.workspace }}/.saripati-ci/models
           key: minilm-model-v1-${{ runner.os }}
-      - run: npm ci
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm rebuild sharp
       - run: npm run build
       - run: npm test
 
@@ -52,6 +66,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm rebuild sharp
       - run: npm run build
       - run: npm run test:install
